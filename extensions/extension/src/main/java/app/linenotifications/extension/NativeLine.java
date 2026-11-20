@@ -1,17 +1,33 @@
 package app.linenotifications.extension;
 
+import android.app.Notification;
+import android.app.Person;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
+import android.graphics.drawable.Icon;
+import android.os.Bundle;
+import android.os.Looper;
+import android.os.Parcelable;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import app.linenotifications.extension.core.NotificationPolicy;
 
 /** Adapter for the inspected 26.16.0 / 261600106 DEX only. Never writes LINE's database. */
 final class NativeLine {
+    private static final int MAX_CACHED_AVATARS = 8;
+    private static final long AVATAR_TIMEOUT_MS = 150L;
+    private static final ExecutorService AVATAR_EXECUTOR = Executors.newSingleThreadExecutor();
     private NativeLine() {}
 
     // Server ids bound the native read boundary, but are not necessarily chronological
@@ -149,5 +165,142 @@ final class NativeLine {
             if (cursor.moveToFirst() && cursor.getString(0) != null) return cursor.getString(0);
         } catch (RuntimeException ignored) { }
         return "메시지";
+    }
+
+    /**
+     * Resolves sender profile avatars for expanded MessagingStyle notifications using only
+     * icons already attached to the notification and LINE's local Glide cache
+     * (`onlyRetrieveFromCache(true)`). Never performs network requests or writes storage.
+     */
+    static Map<String, Icon> senderIcons(Context context, String account, boolean group,
+                                         Notification original, List<NotificationPolicy.Message> messages) {
+        Map<String, Icon> icons = new HashMap<>();
+        if (messages == null || messages.isEmpty()) return icons;
+
+        String keyPrefix = account + ":";
+        Icon nativeSenderIcon = null;
+        CharSequence nativeSenderName = null;
+        if (original != null && original.extras != null) {
+            Parcelable[] rawMessages = original.extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+            if (rawMessages != null) {
+                for (Parcelable entry : rawMessages) {
+                    if (!(entry instanceof Bundle)) continue;
+                    Person person = ((Bundle) entry).getParcelable("sender_person");
+                    if (person == null || person.getIcon() == null) continue;
+                    String key = person.getKey();
+                    if (key != null && key.startsWith(keyPrefix)) {
+                        icons.put(key.substring(keyPrefix.length()), person.getIcon());
+                    } else {
+                        nativeSenderIcon = person.getIcon();
+                        nativeSenderName = person.getName();
+                    }
+                }
+            }
+        }
+        Icon largeIcon = original != null ? original.getLargeIcon() : null;
+
+        if (!group) {
+            Icon directIcon = nativeSenderIcon != null ? nativeSenderIcon : largeIcon;
+            if (directIcon != null) {
+                for (NotificationPolicy.Message message : messages) {
+                    icons.putIfAbsent(message.senderId, directIcon);
+                }
+                return icons;
+            }
+        }
+
+        // Prioritize the most recent distinct senders up to a bounded count to keep Binder IPC small.
+        Set<String> missing = new LinkedHashSet<>();
+        for (int i = messages.size() - 1; i >= 0 && missing.size() < MAX_CACHED_AVATARS; i--) {
+            String sid = messages.get(i).senderId;
+            if (sid != null && !sid.isEmpty() && !icons.containsKey(sid)) missing.add(sid);
+        }
+        if (!missing.isEmpty()) {
+            Map<String, String> paths = picturePaths(context, missing);
+            int sizePx = Math.min(Math.max(Math.round(40f * context.getResources().getDisplayMetrics().density), 64), 128);
+            for (String sid : missing) {
+                String path = paths.get(sid);
+                if (path == null || path.isEmpty()) continue;
+                Icon cached = cachedAvatarIcon(context, sid, path, sizePx);
+                if (cached != null) icons.put(sid, cached);
+            }
+        }
+
+        // Group fallback for the newest sender only when LINE's original notification carried
+        // a matching individual sender Person icon (avoiding assigning a group icon to a person).
+        if (group && nativeSenderIcon != null && nativeSenderName != null) {
+            NotificationPolicy.Message latest = messages.get(messages.size() - 1);
+            if (!icons.containsKey(latest.senderId) && latest.sender != null
+                    && latest.sender.contentEquals(nativeSenderName)) {
+                icons.put(latest.senderId, nativeSenderIcon);
+            }
+        }
+        return icons;
+    }
+
+    private static Map<String, String> picturePaths(Context context, Set<String> mids) {
+        Map<String, String> paths = new HashMap<>();
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
+                context.getDatabasePath("contact").getAbsolutePath(), null,
+                SQLiteDatabase.OPEN_READONLY)) {
+            for (String mid : mids) {
+                try (Cursor cursor = db.rawQuery(
+                        "SELECT picture_path FROM contacts WHERE mid = ? LIMIT 1", new String[]{mid})) {
+                    if (cursor.moveToFirst()) {
+                        String path = cursor.getString(0);
+                        if (path != null && !path.isEmpty()) paths.put(mid, path);
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) { }
+        return paths;
+    }
+
+    private static Icon cachedAvatarIcon(Context context, String mid, String picturePath, int sizePx) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            try {
+                return AVATAR_EXECUTOR.submit(() -> loadCachedAvatar(context, mid, picturePath, sizePx))
+                        .get(AVATAR_TIMEOUT_MS + 50L, TimeUnit.MILLISECONDS);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return loadCachedAvatar(context, mid, picturePath, sizePx);
+    }
+
+    private static Icon loadCachedAvatar(Context context, String mid, String picturePath, int sizePx) {
+        Object glideManager = null;
+        Object futureTarget = null;
+        try {
+            Object model = type("e80.l0").getConstructor(String.class, String.class, boolean.class)
+                    .newInstance(mid, picturePath, true);
+            Object retriever = type("com.bumptech.glide.c").getMethod("c", Context.class).invoke(null, context);
+            glideManager = type("xn.o").getMethod("f", Context.class).invoke(retriever, context);
+            Object request = type("com.bumptech.glide.o").getMethod("g").invoke(glideManager);
+            request = type("com.bumptech.glide.n").getMethod("b0", Object.class).invoke(request, model);
+            Class<?> optionsType = type("ao.a");
+            Class<?> strategyType = type("kn.l");
+            Object diskData = strategyType.getField("b").get(null);
+            request = optionsType.getMethod("h", strategyType).invoke(request, diskData);
+            request = optionsType.getMethod("s", boolean.class).invoke(request, true); // onlyRetrieveFromCache(true)
+            request = optionsType.getMethod("u", int.class, int.class).invoke(request, sizePx, sizePx);
+            request = optionsType.getMethod("d").invoke(request); // circleCrop()
+            futureTarget = type("com.bumptech.glide.n").getMethod("g0").invoke(request);
+            if (!(futureTarget instanceof Future<?>)) return null;
+            Object result = ((Future<?>) futureTarget).get(AVATAR_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (!(result instanceof Bitmap)) return null;
+            Bitmap bitmap = (Bitmap) result;
+            if (bitmap.isRecycled()) return null;
+            Bitmap copy = bitmap.copy(Bitmap.Config.ARGB_8888, false);
+            return copy != null ? Icon.createWithBitmap(copy) : null;
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (glideManager != null && futureTarget != null) {
+                try {
+                    type("com.bumptech.glide.o").getMethod("n", type("bo.j")).invoke(glideManager, futureTarget);
+                } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            }
+        }
     }
 }

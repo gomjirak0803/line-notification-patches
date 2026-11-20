@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import app.linenotifications.extension.core.NotificationPolicy;
 
 /** Called only from the verified native notification publish path. */
@@ -24,6 +26,7 @@ public final class Notifications {
     private static final String MESSAGE_TAG = "NOTIFICATION_TAG_MESSAGE";
     private static final String DEBUG_TAG = "LineNotifyPatch";
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final ExecutorService REFRESH_WORKER = Executors.newSingleThreadExecutor();
     private static final Map<NotificationPolicy.ChatKey, Runnable> DEFERRED = new HashMap<>();
     private Notifications() {}
 
@@ -104,20 +107,22 @@ public final class Notifications {
             NotificationPolicy.ChatKey key = new NotificationPolicy.ChatKey(NativeLine.account(), chat);
             Runnable callback = new Runnable() {
                 @Override public void run() {
-                    synchronized (Notifications.class) {
-                        if (DEFERRED.get(key) != this) return;
-                        DEFERRED.remove(key);
-                        try {
-                            if ((!Settings.enabled(Settings.INFO) && !Settings.enabled(Settings.READ))
-                                    || !key.accountId.equals(NativeLine.account())) return;
-                            // refreshActive rechecks account, privacy, read boundary and
-                            // current post identity, and never creates an absent notification.
-                            refreshActive(key.chatId, false);
-                            trace("local save: trailing refresh completed");
-                        } catch (ReflectiveOperationException | RuntimeException ignored) {
-                            trace("local save: trailing refresh unavailable");
+                    REFRESH_WORKER.execute(() -> {
+                        synchronized (Notifications.class) {
+                            if (DEFERRED.get(key) != this) return;
+                            DEFERRED.remove(key);
+                            try {
+                                if ((!Settings.enabled(Settings.INFO) && !Settings.enabled(Settings.READ))
+                                        || !key.accountId.equals(NativeLine.account())) return;
+                                // refreshActive rechecks account, privacy, read boundary and
+                                // current post identity, and never creates an absent notification.
+                                refreshActive(key.chatId, false);
+                                trace("local save: trailing refresh completed");
+                            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                                trace("local save: trailing refresh unavailable");
+                            }
                         }
-                    }
+                    });
                 }
             };
             Runnable previous = DEFERRED.put(key, callback);
@@ -263,7 +268,9 @@ public final class Notifications {
                     NotificationPolicy.Decision decision = NotificationPolicy.evaluate(settings, snapshot, false);
                     String name = state.name == null || state.name.isEmpty()
                             ? String.valueOf(original.extras.getCharSequence(Notification.EXTRA_TITLE, "LINE")) : state.name;
-                    return ConversationPreview.apply(builder, snapshot.chat, name, state.unread, decision.recentMessages);
+                    Map<String, android.graphics.drawable.Icon> icons = NativeLine.senderIcons(
+                            Settings.context(), account, !chat.startsWith("u"), original, decision.recentMessages);
+                    return ConversationPreview.apply(builder, snapshot.chat, name, state.unread, decision.recentMessages, icons);
                 }
             } catch (ReflectiveOperationException | RuntimeException ignored) {
                 // Hidden-room suppression and silent-channel routing are already enforced above;

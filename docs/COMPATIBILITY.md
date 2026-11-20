@@ -49,6 +49,7 @@
 | 채팅 목록과 같은 읽음 객체 | `sc0.f.a(context, n30.d.a)` → `n30.d.b()` → `ue3.y0.a` → `qg3.e.e(chatId)` |
 | 읽음 완료 후 방 알림 정리 | `a78.b` 완료 콜백에서 `fw3.h.c(...)`, `fw3.l.a(chat)` 및 `fw3.l.c(chat)` 사용 |
 | 푸시 등록 | FIS 요청의 `X-Android-Cert` / `URLConnection.addRequestProperty` |
+| 펼친 알림 발신자 프로필 사진 | 1:1 원본 알림 `largeIcon`/`sender_person` 재사용 + 그룹 `contacts.picture_path` 및 LINE Glide 로컬 캐시 전용(`e80.l0`, `ao.a.s(true)`=`onlyRetrieveFromCache(true)`, `kn.l.b`, `ao.a.d()`) |
 
 추가 코드는 대화 DB에 직접 쓰거나 메시지 서버를 조회하지 않습니다. 0.1.6의 읽음 버튼을 누르면 검증한 LINE 기본 읽음 객체를 호출합니다. 0.1.3에서는 사용자가 방 알림 설정을 변경할 때 기존 native 설정 경로를 호출하며, 그 경로의 정상적인 로컬·서버 설정 변경을 사용합니다. 별도 서버 API나 주기적인 메시지 수집을 추가하지 않습니다. 로컬 메시지를 조회한 전후로 LINE의 미확인 개수·읽음 경계가 달라지면 새 미리보기를 게시하지 않습니다. 취소된 메시지와 동기화의 세부 타이밍은 실기기 검증이 필요합니다.
 

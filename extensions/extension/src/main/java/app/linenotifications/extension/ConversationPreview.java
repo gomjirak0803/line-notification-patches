@@ -2,6 +2,7 @@ package app.linenotifications.extension;
 
 import android.app.Notification;
 import android.app.Person;
+import android.graphics.drawable.Icon;
 import android.os.Bundle;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +15,11 @@ final class ConversationPreview {
 
     static Notification apply(Notification.Builder builder, NotificationPolicy.ChatKey chat, String room,
                               int unread, List<NotificationPolicy.Message> messages) {
+        return apply(builder, chat, room, unread, messages, null);
+    }
+
+    static Notification apply(Notification.Builder builder, NotificationPolicy.ChatKey chat, String room,
+                              int unread, List<NotificationPolicy.Message> messages, Map<String, Icon> icons) {
         // recoverBuilder can retain the previous custom/Inbox style. Clear only presentation
         // metadata, keeping LINE's routing, account marker, actions and native-action backup.
         Bundle extras = new Bundle(builder.getExtras());
@@ -34,8 +40,11 @@ final class ConversationPreview {
             if (person == null) {
                 String sender = group ? message.sender : title;
                 if (sender == null || sender.isEmpty()) sender = "메시지";
-                person = new Person.Builder().setName(sender)
-                        .setKey(chat.accountId + ":" + message.senderId).build();
+                Person.Builder personBuilder = new Person.Builder().setName(sender)
+                        .setKey(chat.accountId + ":" + message.senderId);
+                Icon icon = icons != null ? icons.get(message.senderId) : null;
+                if (icon != null) personBuilder.setIcon(icon);
+                person = personBuilder.build();
                 people.put(message.senderId, person);
             }
             style.addMessage(new Notification.MessagingStyle.Message(message.text, message.timestampMillis, person));

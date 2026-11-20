@@ -219,6 +219,34 @@ val markAsReadPatch = bytecodePatch(
     }
 }
 
+private fun BytecodePatchContext.requireAvatarCacheBindings() {
+    fun method(owner: String, name: String, parameters: List<String>, result: String): com.android.tools.smali.dexlib2.iface.Method =
+        classDefBy(owner).methods.singleOrNull {
+            it.name == name && it.parameterTypes.map(CharSequence::toString) == parameters && it.returnType == result
+                && AccessFlags.PUBLIC.isSet(it.accessFlags)
+        } ?: throw PatchException("Native avatar cache method changed: $owner->$name")
+    fun field(owner: String, name: String, type: String) {
+        if (classDefBy(owner).fields.none { it.name == name && it.type == type && AccessFlags.PUBLIC.isSet(it.accessFlags) })
+            throw PatchException("Native avatar cache field changed: $owner->$name")
+    }
+    method("Lcom/bumptech/glide/c;", "c", listOf("Landroid/content/Context;"), "Lxn/o;")
+    method("Lxn/o;", "f", listOf("Landroid/content/Context;"), "Lcom/bumptech/glide/o;")
+    method("Lcom/bumptech/glide/o;", "g", emptyList(), "Lcom/bumptech/glide/n;")
+    method("Lcom/bumptech/glide/o;", "n", listOf("Lbo/j;"), "V")
+    method("Lcom/bumptech/glide/n;", "b0", listOf("Ljava/lang/Object;"), "Lcom/bumptech/glide/n;")
+    method("Lcom/bumptech/glide/n;", "g0", emptyList(), "Lao/c;")
+    method("Lao/a;", "h", listOf("Lkn/l;"), "Lao/a;")
+    method("Lao/a;", "d", emptyList(), "Lao/a;")
+    val cacheOnly = method("Lao/a;", "s", listOf("Z"), "Lao/a;")
+    if (cacheOnly.implementation?.instructions?.none { (it as? NarrowLiteralInstruction)?.narrowLiteral == 524288 } != false)
+        throw PatchException("Glide onlyRetrieveFromCache bitmask changed")
+    val overrideSize = method("Lao/a;", "u", listOf("I", "I"), "Lao/a;")
+    if (overrideSize.implementation?.instructions?.none { (it as? NarrowLiteralInstruction)?.narrowLiteral == 512 } != false)
+        throw PatchException("Glide override bitmask changed")
+    field("Lkn/l;", "b", "Lkn/l\$c;")
+    method("Le80/l0;", "<init>", listOf("Ljava/lang/String;", "Ljava/lang/String;", "Z"), "V")
+}
+
 @Suppress("unused")
 val moreChatInfoPatch = bytecodePatch(
     name = "More Chat Info",
@@ -228,6 +256,7 @@ val moreChatInfoPatch = bytecodePatch(
     compatibleWith(COMPATIBILITY_LINE)
     dependsOn(notificationIntegrationPatch)
     execute {
+        requireAvatarCacheBindings()
         markIncluded("infoIncluded")
     }
 }

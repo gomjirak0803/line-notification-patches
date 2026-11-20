@@ -1,5 +1,11 @@
 # Android 실기기 검증표
 
+## 0.1.11-dev 펼친 알림 프로필 사진(로컬 캐시 전용) 검증 — 2026-11-20
+
+`More Chat Info`의 `ConversationPreview`(`MessagingStyle`)에서 각 `Person`에 발신자 프로필 `Icon`을 연결했습니다. 1:1 채팅은 LINE 원본 알림의 `largeIcon` / `sender_person` 아이콘을 재사용하고, 그룹 채팅 다중 발신자는 `contacts` DB `picture_path`와 LINE의 Glide 로컬 캐시 전용(`onlyRetrieveFromCache(true)`, `DiskCacheStrategy.DATA`, `circleCrop()`, 최대 8명, `64~128px`, 150ms 타임아웃)으로 읽어 추가 네트워크 요청 없이 표시합니다. 400ms 지연 갱신(`deferRefresh`)도 백그라운드 워커 스레드로 이동했습니다.
+
+정책 86개·Python 단위 테스트 15개, 두 APKM 각각 정적 계약 1,075개, 읽음 단독 선택 검사 1,035개(Glide 캐시 바인딩 11개 포함)를 통과했습니다. S10e(SM-G970N, Android 12/API 31)에 동일 서명 테스트 APK(`8316d127e41f5e1a449717e464c42e00c6742833efe406cfaccd9b9b8ebed6fb`)를 설치해 사용자가 실제 메시지로 펼친 알림 프로필 사진 정상 표시를 확인했습니다.
+
 ## 0.1.10-dev Android 15/16 Edge-to-Edge 수정·안정성 정리 검증 — 2026-11-20
 
 `SettingsPage`의 edge-to-edge 인셋 적용(`setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener` + `WindowInsets.CONSUMED`), `More Chat Info` DB 조회 예외 격리·`server_id` 비숫자 방어, `Settings.java` `extras != null` 방어 및 미사용 `NativeLine.chat` 제거, 미사용 `NotificationBadgeResources.kt` 제거를 반영했습니다. 정책 86개·Python 단위 테스트 15개, 두 APKM 각각 정적 계약 1,011개, 읽음 단독 선택 검사 971개를 통과했습니다.
