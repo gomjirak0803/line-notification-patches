@@ -1,5 +1,31 @@
 # Android 실기기 검증표
 
+## 0.1.10-dev Android 15/16 Edge-to-Edge 수정·안정성 정리 검증 — 2026-11-20
+
+`SettingsPage`의 edge-to-edge 인셋 적용(`setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener` + `WindowInsets.CONSUMED`), `More Chat Info` DB 조회 예외 격리·`server_id` 비숫자 방어, `Settings.java` `extras != null` 방어 및 미사용 `NativeLine.chat` 제거, 미사용 `NotificationBadgeResources.kt` 제거를 반영했습니다. 정책 86개·Python 단위 테스트 15개, 두 APKM 각각 정적 계약 1,011개, 읽음 단독 선택 검사 971개를 통과했습니다.
+
+### S10e (SM-G970N, Android 12 / API 31 / One UI 4.1) 실기기 회귀
+| 0.1.10-dev S10e 실기기 항목 | 결과 |
+| --- | --- |
+| 동일 서명 업데이트 | 설치 성공, 설치본 `base.apk` SHA-256 일치(`f00228785e7857a3d525bb85acf19636c5cb4f1bd71904d59769e268fbe30bff`), 기존 로그인·설정 스위치 4개 켜짐 상태 유지 |
+| `SettingsPage` 레이아웃·인셋 회귀 (API 31) | 상태바 `[0,0][1080,117]` 바로 아래 `header_root` `[0,117][1080,279]` 정렬(겹침·이중 패딩 없음, LINE 기본 설정 헤더 하단 `279`과 일치), `ScrollView` `[0,279][1080,2164]` 네비게이션바 상단 정렬, 크래시 0건 |
+
+묶음 SHA-256: `126d6d972ecf75f4dd439197c78c472b5739f23cad21f5fcf9af2351c3219453`. APK SHA-256: `f00228785e7857a3d525bb85acf19636c5cb4f1bd71904d59769e268fbe30bff`.
+
+### Android 16 (API 36) 교차 환경 검증 — 2026-11-20 (에뮬레이터 + S22 Ultra One UI 8.0 진단)
+
+S10e(Android 12 / One UI 4.1) 외 최신 Android 15/16(`targetSdk=36`) 환경 검증을 위해 **Android 16 AOSP 에뮬레이터(`pixel_api36`, API 36, `x86_64` + `arm64-v8a` 변환)**와 **실기기 Galaxy S22 Ultra(`SM-S908N`, Android 16 / API 36 / One UI 8.0, `1440×3088 @ 600dpi`)**에서 진단 앱(실코드 `ConversationPreview`·`NotificationPolicy` 및 `SettingsPage` 동일 테마 `LineNotificationSettingsWindow`)과 패치 APK 부팅을 검증했습니다. S22 Ultra의 기존 공식 LINE(`26.18.2`)은 건드리지 않았고, 검증 직후 임시 진단 앱(`app.linenotifications.diag`)을 제거했습니다.
+
+| Android 16 (API 36) 교차 검증 항목 | 환경 | 결과 |
+| --- | --- | --- |
+| `SettingsPage` edge-to-edge 버그 재현 (`targetSdk=36`) | AOSP 에뮬레이터 (API 36) / S22 Ultra One UI 8.0 (API 36) | 기존 `setDecorFitsSystemWindows(true)`가 API 35+에서 무시되어 헤더가 상태바·펀치홀과 겹침 확인 (`headerTop=0`, 에뮬 `statusTop=128`, S22U `statusTop=100`, `overlapTop=true`) |
+| `SettingsPage` edge-to-edge 수정 검증 | AOSP 에뮬레이터 (API 36) / S22 Ultra One UI 8.0 (API 36) | `setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener`(`systemBars() \| displayCutout()`, `WindowInsets.CONSUMED`) 적용 후 세로(`headerTop=128` 에뮬 / `100` S22U)·가로 컷아웃(`headerLeft=128`, `headerTop=63`) 모두 `overlapTop=false`·`overlapLeft=false`, 라이트 배경 다크 상태바 아이콘 정상 확인 |
+| 순정 AOSP / One UI 8.0 알림 렌더링 (`ConversationPreview`) | AOSP 에뮬레이터 (API 36) / S22 Ultra One UI 8.0 (API 36) | 그룹 `[32]`(최근 25건 유지·연속 발신자 묶음·긴 본문 자동 줄바꿈·명시적 `\n`), 1:1 `[1]`, `읽음`/`답장` 버튼(`actions=2`), `No reply`(`mAllowSystemGeneratedContextualActions=false`, 추천 답장 칩 0개), 무음 채널(`line_notification_patches.silent.v1`, `mImportance=LOW`, `isNoisy=false`, `mIsInterruptive=false`) 확인 |
+| 잠금화면 `VISIBILITY_PRIVATE` 가림 | AOSP 에뮬레이터 (API 36) | PIN 설정 + `lock_screen_allow_private_notifications=0` 상태에서 잠금화면 평문 유출 0건(`PLAINTEXT_LEAKED: []`), `publicVersion`(`LINE / 새 메시지가 있습니다`) 확인 |
+| 패치된 LINE `0.1.9-dev` ARM64 APK 부팅 (미로그인) | AOSP 에뮬레이터 (API 36) | `arm64-v8a` 설치 및 `RegistrationActivity` 기동 성공(`FATAL`/`VerifyError`/`NoSuchMethodError`/`SecurityException` 0건; 로그인·실푸시 미수행) |
+
+*(참고: S22 Ultra 및 에뮬레이터 검증은 진단 앱·미로그인 부팅 범위이며, 실제 LINE 계정 로그인 기반 백그라운드 FCM 수신·읽음 검증은 S10e Android 12에서 수행했습니다.)*
+
 ## 0.1.9-dev 채팅 목록 길게 누르기·오프라인 읽음 검증 — 2026-11-20
 
 `Not Too Much Silent` 켜짐 상태에서 **채팅 목록 길게 누르기 메뉴(`d42.d.u3`)의 알림 끄기/켜기**와 **목록 음소거 종 아이콘·메뉴 라벨(`f22.i.f`)**을 로컬 조용히 받기에 연결했습니다. 정책 86개·Python 단위 테스트 15개(SQL 4·발송 도구 8·메타데이터 3), 두 APKM 각각 정적 계약 1,007개, 읽음 단독 선택 검사 967개를 통과했습니다.

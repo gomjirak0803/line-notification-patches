@@ -78,7 +78,8 @@ public final class Settings {
         ChatNotifications.change(context, chat, ChatNotifications.QUIET, null, () -> {
             NotificationManager manager = context.getSystemService(NotificationManager.class);
             for (StatusBarNotification n : manager.getActiveNotifications()) {
-                if (chat.equals(n.getNotification().extras.getString("line.chat.id"))) manager.cancel(n.getTag(), n.getId());
+                android.os.Bundle extras = n.getNotification().extras;
+                if (extras != null && chat.equals(extras.getString("line.chat.id"))) manager.cancel(n.getTag(), n.getId());
             }
             Notifications.clearSummaries(manager);
         });
@@ -98,7 +99,8 @@ public final class Settings {
         if (mute) {
             NotificationManager manager = context().getSystemService(NotificationManager.class);
             for (StatusBarNotification n : manager.getActiveNotifications()) {
-                if (chat.equals(n.getNotification().extras.getString("line.chat.id"))) manager.cancel(n.getTag(), n.getId());
+                android.os.Bundle extras = n.getNotification().extras;
+                if (extras != null && chat.equals(extras.getString("line.chat.id"))) manager.cancel(n.getTag(), n.getId());
             }
             Notifications.clearSummaries(manager);
         }
@@ -109,7 +111,8 @@ public final class Settings {
             String account = NativeLine.account();
             NotificationManager manager = context().getSystemService(NotificationManager.class);
             for (StatusBarNotification n : manager.getActiveNotifications()) {
-                String chat = n.getNotification().extras.getString("line.chat.id");
+                android.os.Bundle extras = n.getNotification().extras;
+                String chat = extras == null ? null : extras.getString("line.chat.id");
                 if (NativeLine.regularChat(chat) && fullyMuted(account, chat)) manager.cancel(n.getTag(), n.getId());
             }
             Notifications.clearSummaries(manager);
@@ -163,7 +166,6 @@ public final class Settings {
             Object click = Proxy.newProxyInstance(context.getClassLoader(), new Class[]{callback}, (proxy, method, args) -> {
                 if (method.getName().equals("invoke")) {
                     if (!account.equals(NativeLine.account())) return null;
-                    NativeLine.Chat state = NativeLine.chat(chat);
                     boolean hidden = fullyMuted(account, chat);
                     new AlertDialog.Builder(context).setTitle("알림 완전히 숨기기")
                             .setMessage(hidden ? "이 채팅방의 알림 숨김을 해제할까요?" : "이 채팅방은 조용한 알림도 표시하지 않습니다. LINE의 기존 알림 끄기처럼 처리합니다.")

@@ -1,7 +1,6 @@
 package app.linenotifications.patches
 
 import app.linenotifications.patches.settings.notificationSettingsPatch
-import app.linenotifications.patches.settings.notificationBadgeResourcesPatch
 import app.linenotifications.patches.shared.*
 import app.linenotifications.patches.shared.Constants.COMPATIBILITY_LINE
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
@@ -227,7 +226,7 @@ val moreChatInfoPatch = bytecodePatch(
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
-    dependsOn(notificationIntegrationPatch, notificationBadgeResourcesPatch)
+    dependsOn(notificationIntegrationPatch)
     execute {
         markIncluded("infoIncluded")
     }

@@ -3,12 +3,14 @@ package app.linenotifications.extension;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.drawable.ColorDrawable;
 import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -54,6 +56,11 @@ final class SettingsPage extends Dialog {
         rows.setPadding(0, 0, 0, dp(24));
         scroll.addView(rows, new ScrollView.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        page.setOnApplyWindowInsetsListener((view, insets) -> {
+            Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return WindowInsets.CONSUMED;
+        });
         setContentView(page);
         Window window = getWindow();
         window.setBackgroundDrawable(new ColorDrawable(background));
@@ -62,9 +69,7 @@ final class SettingsPage extends Dialog {
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.setStatusBarColor(background);
         window.setNavigationBarColor(background);
-        window.setDecorFitsSystemWindows(true);
-        boolean light = Color.red(background) * 299 + Color.green(background) * 587 + Color.blue(background) * 114 > 128000;
-        window.getDecorView().setSystemUiVisibility(light ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
+        window.setDecorFitsSystemWindows(false);
         showMain();
     }
 
@@ -76,16 +81,21 @@ final class SettingsPage extends Dialog {
 
     @Override public void show() {
         super.show();
-        getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        Window window = getWindow();
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        window.getDecorView().requestApplyInsets();
+        applyBarAppearance(window);
         // Floating-dialog theme flags can be reapplied on attach. Set system-bar contrast
         // after show, when this full-page window owns the inset controller.
-        getWindow().getDecorView().post(() -> {
-            WindowInsetsController controller = getWindow().getInsetsController();
-            if (controller == null) return;
-            boolean light = Color.red(background) * 299 + Color.green(background) * 587 + Color.blue(background) * 114 > 128000;
-            int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-            controller.setSystemBarsAppearance(light ? mask : 0, mask);
-        });
+        window.getDecorView().post(() -> applyBarAppearance(window));
+    }
+
+    private void applyBarAppearance(Window window) {
+        WindowInsetsController controller = window.getInsetsController();
+        if (controller == null) return;
+        boolean light = Color.red(background) * 299 + Color.green(background) * 587 + Color.blue(background) * 114 > 128000;
+        int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+        controller.setSystemBarsAppearance(light ? mask : 0, mask);
     }
 
     @Override public void onBackPressed() {

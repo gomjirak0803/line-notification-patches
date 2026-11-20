@@ -240,29 +240,35 @@ public final class Notifications {
 
         applyActions(builder, original, account, chat, summary);
         if (settings.moreChatInfo) {
-            NativeLine.Chat state = NativeLine.chat(chat);
-            boolean preview = NativeLine.previewsAllowed();
-            String posted = original.extras.getString("line.message.id");
-            if (state != null && preview && posted != null) {
-                List<NotificationPolicy.Message> messages = NativeLine.recent(chat, account, state);
-                NotificationPolicy.PreviewState readiness = NotificationPolicy.previewState(state.unread, state.readUp, posted, messages);
-                if (readiness == NotificationPolicy.PreviewState.READ) return null;
-                if (readiness == NotificationPolicy.PreviewState.NATIVE) {
-                    trace("preview: waiting for local save");
-                    return builder.build();
+            try {
+                NativeLine.Chat state = NativeLine.chat(chat);
+                boolean preview = NativeLine.previewsAllowed();
+                String posted = original.extras.getString("line.message.id");
+                if (state != null && preview && posted != null) {
+                    List<NotificationPolicy.Message> messages = NativeLine.recent(chat, account, state);
+                    NotificationPolicy.PreviewState readiness = NotificationPolicy.previewState(state.unread, state.readUp, posted, messages);
+                    if (readiness == NotificationPolicy.PreviewState.READ) return null;
+                    if (readiness == NotificationPolicy.PreviewState.NATIVE) {
+                        trace("preview: waiting for local save");
+                        return builder.build();
+                    }
+                    // A concurrent read/account change invalidates this preview. Let the native
+                    // notification/sync path produce the next state; never post stale plaintext.
+                    NativeLine.Chat after = NativeLine.chat(chat);
+                    if (!account.equals(NativeLine.account()) || after == null || after.unread == 0) return null;
+                    if (state.unread != after.unread || !java.util.Objects.equals(state.readUp, after.readUp)
+                            || !NativeLine.previewsAllowed()) return null;
+                    NotificationPolicy.Snapshot snapshot = new NotificationPolicy.Snapshot(
+                            new NotificationPolicy.ChatKey(account, chat), muted, true, state.unread, false, messages);
+                    NotificationPolicy.Decision decision = NotificationPolicy.evaluate(settings, snapshot, false);
+                    String name = state.name == null || state.name.isEmpty()
+                            ? String.valueOf(original.extras.getCharSequence(Notification.EXTRA_TITLE, "LINE")) : state.name;
+                    return ConversationPreview.apply(builder, snapshot.chat, name, state.unread, decision.recentMessages);
                 }
-                // A concurrent read/account change invalidates this preview. Let the native
-                // notification/sync path produce the next state; never post stale plaintext.
-                NativeLine.Chat after = NativeLine.chat(chat);
-                if (!account.equals(NativeLine.account()) || after == null || after.unread == 0) return null;
-                if (state.unread != after.unread || !java.util.Objects.equals(state.readUp, after.readUp)
-                        || !NativeLine.previewsAllowed()) return null;
-                NotificationPolicy.Snapshot snapshot = new NotificationPolicy.Snapshot(
-                        new NotificationPolicy.ChatKey(account, chat), muted, true, state.unread, false, messages);
-                NotificationPolicy.Decision decision = NotificationPolicy.evaluate(settings, snapshot, false);
-                String name = state.name == null || state.name.isEmpty()
-                        ? String.valueOf(original.extras.getCharSequence(Notification.EXTRA_TITLE, "LINE")) : state.name;
-                return ConversationPreview.apply(builder, snapshot.chat, name, state.unread, decision.recentMessages);
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // Hidden-room suppression and silent-channel routing are already enforced above;
+                // a transient preview/DB read failure falls back to the native notification.
+                trace("preview: adapter failed, keeping native notification");
             }
         }
         return builder.build();

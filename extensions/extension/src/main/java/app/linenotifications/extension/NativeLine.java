@@ -124,13 +124,15 @@ final class NativeLine {
                              Integer.toString(Math.min(NotificationPolicy.MAX_RECENT_MESSAGES, state.unread))})) {
             while (cursor.moveToNext()) {
                 String id = cursor.getString(0), senderId = cursor.getString(2), body = cursor.getString(3);
+                long numericId;
+                try { numericId = Long.parseLong(id); } catch (NumberFormatException ignored) { continue; }
                 if (body == null || body.isEmpty()) body = "[첨부 메시지]";
                 String sender = senders.get(senderId);
                 if (sender == null) {
                     sender = senderName(senderId);
                     senders.put(senderId, sender);
                 }
-                result.add(new NotificationPolicy.Message(id, cursor.getLong(1), Long.parseLong(id),
+                result.add(new NotificationPolicy.Message(id, cursor.getLong(1), numericId,
                         senderId, sender, body));
             }
         }
