@@ -38,6 +38,31 @@ final class ChatNotifications {
         return true;
     }
 
+    static boolean interceptChatListToggle(String chat) {
+        if (!Settings.enabled(Settings.SILENT) || !NativeLine.regularChat(chat)) return false;
+        try {
+            String account = NativeLine.account();
+            boolean disabled = Settings.quiet(account, chat) || Settings.fullyMuted(account, chat) || NativeLine.muted(chat);
+            trace("toggle: chat-list menu intercepted");
+            change(Settings.context(), chat, disabled ? NORMAL : QUIET, null, null);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            toast(Settings.context(), "알림 설정을 변경하지 못했습니다. 다시 시도해 주세요.");
+        }
+        // Never fall through to the server mute operation after a failed quiet toggle.
+        return true;
+    }
+
+    static void refreshChatList() {
+        try {
+            Class<?> busType = NativeLine.type("com.linecorp.rxeventbus.d");
+            Object key = busType.getField("a").get(null);
+            Object bus = NativeLine.type("sc0.f").getMethod("a", Context.class, NativeLine.type("sc0.a"))
+                    .invoke(null, Settings.context(), key);
+            Object event = NativeLine.type("xe8.b").getField("CHAT_LIST").get(null);
+            busType.getMethod("b", Object.class).invoke(bus, event);
+        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+    }
+
     static void change(Context context, String chat, int mode, Object nativeCallback, Runnable completed) {
         try {
             if (!NativeLine.regularChat(chat)) return;
@@ -67,10 +92,12 @@ final class ChatNotifications {
                                     .getConstructor(boolean.class).newInstance(mode == NORMAL);
                             NativeLine.type("nt8.l").getMethod("invoke", Object.class).invoke(nativeCallback, result);
                         } else toast(context, mode == HIDDEN ? "알림을 완전히 숨겼습니다."
-                                : mode == QUIET ? "조용히 받도록 설정했습니다." : "알림 숨김을 해제했습니다.");
+                                : mode == QUIET ? "조용히 받도록 설정했습니다."
+                                : oldHidden != null ? "알림 숨김을 해제했습니다." : "일반 알림으로 설정했습니다.");
                     } catch (ReflectiveOperationException | RuntimeException ignored) {
                         toast(context, "설정이 변경되었습니다. 채팅방 메뉴를 다시 열어 주세요.");
                     }
+                    if (success) refreshChatList();
                     if (completed != null) completed.run();
                 });
             };

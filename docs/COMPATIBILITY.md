@@ -41,6 +41,8 @@
 | 방별 알림 설정 | `nn8.c.a` → `pn8.c.c` |
 | 기존 채팅방 알림 버튼 | `z50.y0.invoke`에서 native 결과 콜백 생성 직후 `Settings.interceptToggle` 연결 |
 | 채팅방 메뉴의 알림 표시 상태 | UI용 Parcelable `z50.t2` 생성자의 `m`에 로컬 조용히 받기 상태 반영 |
+| 채팅 목록 길게 누르기 알림 버튼 | `d42.d.u3`의 일반 채팅방(`f22.j`) 분기에서 `Settings.interceptChatListToggle` 연결 (OpenChat `f22.z`·서비스챗 `f22.w` 제외) |
+| 채팅 목록 알림 표시 상태·갱신 | UI 모델 `f22.i` 생성자의 `f`에 `Settings.menuNotifiable` 반영, 전환 완료 시 `com.linecorp.rxeventbus.d.b(xe8.b.CHAT_LIST)`로 목록 갱신 |
 | 사용자 요청에 따른 기본 알림 설정 변경 | 기존 `ue3.k.p(chat, enabled, continuation)` 호출, `dt8.d` 기반 continuation으로 native 비동기 결과 처리 |
 | 완전 숨김 메뉴 | `ChatHistoryMenuFragment.onViewCreated`의 단일 `ji8.f.n(Collection)`, 기존 `d60.z` 메뉴 행 |
 | 읽음 버튼 서비스 진입 | 비공개 `LineAccessServiceForNotification.onStartCommand`에서 패치 전용 action 구분 |
@@ -98,4 +100,4 @@ Morphe의 `Mark as read` 선택 패치와 앱 설정 스위치를 모두 켜야 
 
 이전 0.1.3 빌드는 정책 검사 51개와 APKM별 정적 연결 검사 689개를 통과했습니다. 기존 무음 방을 새 방식으로 전환한 후 백그라운드 수신을 확인했고, 최종 APK의 업데이트 설치·완전 숨김/복원도 확인했습니다. 세부 범위와 시험한 빌드 해시는 실기기 기록에 구분했습니다.
 
-알림창의 `MUTE_CURRENT_CHAT_ACTION`은 `LineAccessServiceForNotification.onStartCommand`에서 구분해 조용히 받기로 연결합니다. 패치 전용 읽음 action은 검증한 기본 읽음 객체로 연결하고, 직접 답장과 그 밖의 LINE action은 원래 본문으로 진입합니다. 채팅 목록·검색의 별도 알림 토글 경로는 이번 연결 범위가 아닙니다.
+알림창의 `MUTE_CURRENT_CHAT_ACTION`은 `LineAccessServiceForNotification.onStartCommand`에서 구분해 조용히 받기로 연결합니다. 0.1.9-dev부터는 채팅 목록 길게 누르기의 일반 채팅방 알림 토글(`d42.d.u3`의 `f22.j` 분기)과 목록 표시 상태(`f22.i.f`)도 같은 로컬 조용히 받기 경로에 연결하며, OpenChat(`f22.z`)·서비스챗(`f22.w`)과 검색 결과의 별도 알림 토글은 LINE 기본 동작을 유지합니다. 패치 전용 읽음 action은 검증한 기본 읽음 객체로 연결하고, 직접 답장과 그 밖의 LINE action은 원래 본문으로 진입합니다.

@@ -2,9 +2,13 @@
 
 Morphe 소스: https://github.com/gomjirak0803/line-notification-patches
 
+[0.1.9-dev 다운로드](https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.9-dev) · [배포 검증 결과](docs/PUBLICATION_STATUS.md)
+
 [Manager에 소스 추가](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) · 사전 릴리스와 실험 앱 버전 설정을 켜세요.
 
 릴리스는 Actions → Release → Run workflow로 만듭니다. 기존 npm semantic-release 설정은 이 Windows standalone 릴리스 경로에서는 사용하지 않습니다.
+
+0.1.9-dev는 `Not Too Much Silent` 켜짐 상태에서 **채팅 목록 길게 누르기 메뉴의 알림 끄기/켜기**와 **목록 음소거 아이콘·메뉴 라벨**에도 로컬 조용히 받기를 적용하며, Android Morphe Manager 원격 메타데이터(`created_at`) 파싱 호환성을 수정합니다. 정책 86개·Python 테스트 15개(SQL 4·발송 도구 8·메타데이터 3), 두 APKM 각각 정적 검사 1,007개와 읽음 단독 검사 967개를 통과했습니다. S10e에서 목록 길게 누르기 왕복 전환·무음/일반 채널 백그라운드 수신·오프라인 읽음 후 재연결 `[1]` 초기화를 확인했습니다. [시험 범위](docs/DEVICE_TESTS.md)
 
 0.1.8-dev는 자동 봇 시험에서 발견한 **최근 메시지 선택 오류와 개별 알림의 숫자 지연**을 수정합니다. 생성 시각으로 최근 25개를 고르고 저장·게시 뒤 활성 알림을 한 번 갱신합니다. 정책 86개·SQL 회귀 4개, 두 APKM 각각 정적 검사 954개와 읽음 단독 검사 928개를 통과했습니다. S10e에 같은 서명으로 업데이트해 **전체 26개·최근 2~26번 → 읽음·알림 제거 → 새 1개**를 실제 자동 발송으로 확인했습니다. 무음·읽음/답장 버튼·추천 답장 제거도 유지됩니다. [시험 범위](docs/DEVICE_TESTS.md)
 
@@ -24,7 +28,7 @@ LINE 26.16.0용 **실험 단계 Morphe 패치**입니다. 0.1.7-dev는 카카오
 
 | 기능 | 현재 동작 / 제한 |
 | --- | --- |
-| Not Too Much Silent | 켜 두면 일반 채팅방 메뉴의 기존 **알림 끄기**가 조용히 받기로 작동합니다. 푸시 수신을 켜 둔 채 이 기기에서 무음 채널로 표시하고, **알림 켜기**를 누르면 일반 알림으로 돌아갑니다. OS에서 차단한 원래 채널은 우회하지 않습니다. 테스트 방의 백그라운드 수신을 확인했습니다. |
+| Not Too Much Silent | 켜 두면 일반 채팅방 메뉴와 **채팅 목록 길게 누르기 메뉴**의 기존 **알림 끄기**가 조용히 받기로 작동합니다. 푸시 수신을 켜 둔 채 이 기기에서 무음 채널로 표시하고, **알림 켜기**를 누르면 일반 알림으로 돌아갑니다. 채팅 목록의 음소거 아이콘과 길게 누르기 메뉴 라벨도 로컬 조용히 받기 상태를 반영합니다. OS에서 차단한 원래 채널은 우회하지 않습니다. |
 | Mute chat | 채팅방 메뉴의 **알림 완전히 숨기기**는 LINE의 기존 알림 끄기를 실행하고 로컬에서도 표시를 막습니다. 패치 설정에서 목록 확인·해제할 수 있습니다. 해제하면 숨기기 전의 조용히 받기 또는 일반 알림으로 돌아갑니다. |
 | More Chat Info | 최근 로컬 미확인 메시지 최대 25개를 시간순으로 대화형 알림에 전달합니다. 발신자별 묶음·줄바꿈·노출량은 Android가 결정합니다. 방 이름 옆 `[숫자]`는 전체 미확인 수이며 표시한 메시지 개수와 구분됩니다. 첫 푸시의 로컬 저장 전에는 기본 미리보기를 유지하고 저장 후 갱신합니다. S10e 합성 검사에서 발신자·본문 약 13.03sp, 그룹의 상단 방 이름 약 10sp를 확인했습니다. |
 | No reply | 추천 답장과 시스템 자동 제안을 해제합니다. 직접 입력하는 답장 버튼과 기존 PendingIntent는 유지합니다. |
@@ -39,7 +43,7 @@ Not Too Much Silent를 끄면 저장한 조용히 받기 상태는 적용하지 
 
 - [공식 계정 테스트 봇 만들기·PC 발송 도구](docs/TEST_BOT.md). 개발용 도구이며 패치 묶음·LINE 앱에는 포함되지 않습니다.
 - [Morphe 가져오기·공개 절차](docs/PUBLISHING.md), [출처·라이선스·공개 전 검토](docs/PUBLICATION_AUDIT.md)
-- 묶음: `patches/build/libs/line-notification-patches-0.1.8-dev.mpp`
+- 묶음: `patches/build/libs/line-notification-patches-0.1.9-dev.mpp`
 - 빌드 정보·해시: `patches/build/libs/build-report.json`
 - 적용 결과·사용한 묶음 해시: `artifacts/validation-summary.json`
 - 기기 시험용 서명 APK: `artifacts/line-arm64-test.apk`, 정보·해시: `artifacts/test-apk.json` (선택형 FIS 복구 포함). 설치·실기기 결과는 `artifacts/device-validation.json`과 [실기기 시험표](docs/DEVICE_TESTS.md)에 기록합니다. 각 기록의 묶음 해시로 버전을 구분합니다.
@@ -61,7 +65,7 @@ Not Too Much Silent를 끄면 저장한 조용히 받기 상태는 적용하지 
 3. Expert mode와 해당 소스의 **Experimental app versions**를 켜고 LINE `26.16.0`, versionCode `261600106`을 선택합니다. [공식 Expert mode 안내](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patching-expert-mode.md)
 4. 사용할 기능인 `Not Too Much Silent`, `More Chat Info`, `No reply`, `Mark as read`를 선택합니다. 공통 설정·연결 패치는 의존성으로 포함됩니다. `Mark as read`만 선택해도 되며 다른 세 기능에 의존하지 않습니다. 일반 재서명 설치에서 푸시 등록이 실패하면 `Restore push registration`도 선택해 원본으로 다시 패치합니다. microG는 기본 의존성이 아닙니다.
 5. 패치 후 설치합니다. 공식 LINE과 서명이 달라 일반 설치에서는 덮어쓰기가 안 될 수 있습니다. **기존 앱을 제거하기 전에 대화 백업과 계정 복구 수단을 확인하세요.** 프로젝트 스크립트는 앱 설치·삭제·로그인을 실행하지 않습니다.
-6. LINE 기본 설정의 프로필 아래 **알림 패치 설정**에서 사용할 기능을 켭니다. Mark as read도 최초에는 꺼져 있으며, 켜거나 끄면 표시 중인 알림 버튼을 갱신합니다. LINE의 제목 바·설정 행·스위치를 사용하는 전체 화면입니다. Not Too Much Silent를 켠 뒤 채팅방 메뉴의 기존 **알림 끄기**를 누르면 조용히 받기가 됩니다. 알림을 전혀 표시하지 않을 방은 **알림 완전히 숨기기**로 지정합니다.
+6. LINE 기본 설정의 프로필 아래 **알림 패치 설정**에서 사용할 기능을 켭니다. Mark as read도 최초에는 꺼져 있으며, 켜거나 끄면 표시 중인 알림 버튼을 갱신합니다. LINE의 제목 바·설정 행·스위치를 사용하는 전체 화면입니다. Not Too Much Silent를 켠 뒤 채팅방 메뉴 또는 **채팅 목록 길게 누르기 메뉴**의 기존 **알림 끄기**를 누르면 조용히 받기가 됩니다. 알림을 전혀 표시하지 않을 방은 **알림 완전히 숨기기**로 지정합니다.
 
 이전 버전이나 다른 기기에서 이미 LINE 기본 알림을 꺼 둔 방은 자동 전환하지 않습니다. 해당 방에서 **알림 켜기 → 알림 끄기**를 한 번 실행하면 새 방식의 조용히 받기로 지정됩니다.
 
@@ -105,4 +109,4 @@ python scripts/validate.py
 
 [GPL-3.0](LICENSE), [이름·상표 고지](NOTICE), [원본·참고 구현 출처](THIRD_PARTY_NOTICES.md). LINE 및 Morphe의 공식 프로젝트가 아닙니다.
 
-Mark as read가 꺼져 있을 때 알림창의 ‘알림 끄기’도 조용히 받기로 연결됩니다. 현재 버튼 전환 범위는 채팅방 메뉴와 알림창입니다. 채팅 목록 길게 누르기·검색 결과의 별도 알림 설정은 LINE 기본 동작을 유지하므로, 조용히 받기를 지정할 때는 채팅방 메뉴를 사용하세요.
+Mark as read가 꺼져 있을 때 알림창의 ‘알림 끄기’도 조용히 받기로 연결됩니다. 현재 버튼 전환 범위는 채팅방 메뉴, 채팅 목록 길게 누르기 메뉴, 알림창입니다. 검색 결과의 별도 알림 설정은 LINE 기본 동작을 유지합니다.

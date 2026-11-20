@@ -1,5 +1,23 @@
 # Android 실기기 검증표
 
+## 0.1.9-dev 채팅 목록 길게 누르기·오프라인 읽음 검증 — 2026-11-20
+
+`Not Too Much Silent` 켜짐 상태에서 **채팅 목록 길게 누르기 메뉴(`d42.d.u3`)의 알림 끄기/켜기**와 **목록 음소거 종 아이콘·메뉴 라벨(`f22.i.f`)**을 로컬 조용히 받기에 연결했습니다. 정책 86개·Python 단위 테스트 15개(SQL 4·발송 도구 8·메타데이터 3), 두 APKM 각각 정적 계약 1,007개, 읽음 단독 선택 검사 967개를 통과했습니다.
+
+S10e(SM-G970N, Android 12/API 31)에 동일 서명으로 데이터 보존 업데이트를 설치했고, 공식 계정 테스트 봇 방만 대상으로 아래 항목을 검증했습니다. 시험 종료 후 네트워크(`wifi_on=1`, `mobile_data=0`), 패치 스위치 4개(켜짐), 테스트 방 조용히 받기 상태, 디버그 로그(`INFO`)를 원상 복구했고 임시 자격 증명 파일은 즉시 삭제했습니다.
+
+| 0.1.9-dev 실기기 시험 항목 | 결과 |
+| --- | --- |
+| 동일 서명 업데이트 | 설치 성공, 설치본 `base.apk` SHA-256 일치(`d7d2f083598cca6fa397e3fb8791c71781ab1cfd28467cdd23db6e62c8b5e393`), 기존 로그인·설정 유지 |
+| 채팅 목록 길게 누르기 왕복 토글·목록 아이콘 | 조용히 받기 상태에서 목록 음소거 아이콘 표시(`True`)·메뉴 `알림 켜기` → 탭 시 `toggle: chat-list menu intercepted`·`setting: normal requested`·`native delivery already matches`·즉시 아이콘 제거(`False`)·메뉴 `알림 끄기` → 재탭 시 `setting: quiet requested`·즉시 아이콘 복원(`True`)·메뉴 `알림 켜기` 확인 |
+| 목록 길게 누르기 → 무음 채널 백그라운드 수신 | 목록 길게 누르기로 `알림 끄기` 지정 후 1개 발송 시 무음 채널(`line_notification_patches.silent.v1`, `importance=2`, `[1]`, 최근 1개, `읽음` 제거) 확인 |
+| 목록 길게 누르기 → 일반 채널 백그라운드 수신 | 목록 길게 누르기로 `알림 켜기` 전환 후 1개 발송 시 기본 채널(`jp.naver.line.android.notification.NewMessages`, `importance=4`, `[1]`, `읽음` 제거) 확인 후 다시 목록 길게 누르기로 `알림 끄기` 복원 |
+| 오프라인 읽음 실행 및 네트워크 재연결 | 2개 수신(`[2]`, 최근 2개) → Wi-Fi 차단(`mobile_data=0`, `Active default network: none`) 상태에서 알림 `읽음` 실행 시 `read: native updater submitted` → `read: native completion and room cleanup`으로 로컬 알림 즉시 정리(로컬 완료이며 서버 수신 확인이 아님) → Wi-Fi 재연결(`Active default network: 102`) 후 새 1개 발송 시 `[1]`·최근 1개로 이전 오프라인 2개 본문 미혼입 확인 |
+
+묶음 SHA-256: `7d34bdd0f028b728f315919692e8a2eb9dc5c6c4197f7c338b23dd874bf2d401`. APK SHA-256: `d7d2f083598cca6fa397e3fb8791c71781ab1cfd28467cdd23db6e62c8b5e393`.
+
+아직 미검증으로 남은 범위: 일반 사용자 간 1:1·그룹의 0.1.9 회귀(직접 답장 실제 전송 포함), 다른 Android 버전·제조사, 실제 계정 변경, 잠금화면 비공개 표시.
+
 ## 0.1.8-dev 자동 봇 시험
 
 사용자가 공식 계정을 준비하고 자동 시험을 요청했습니다. PC 발송 창에 입력된 토큰을 표시하거나 파일로 저장하지 않고, UI의 발송 버튼으로 본인에게만 시험 문자를 보냈습니다. 테스트 봇 외 대화방은 읽지 않았습니다.

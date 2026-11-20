@@ -90,9 +90,11 @@ public final class ApkContractTest {
                 "interceptNotificationAction", "onMessageStored")) {
             check(calls.getOrDefault(hook, 0) == 1, "Exactly one native hook for " + hook + ": " + calls.get(hook));
         }
-        for (String hook : Arrays.asList("captureChatMenu", "addChatMenu", "interceptToggle", "menuNotifiable")) {
+        for (String hook : Arrays.asList("captureChatMenu", "addChatMenu", "interceptToggle", "interceptChatListToggle")) {
             check(calls.getOrDefault(hook, 0) == (readOnly ? 0 : 1), "Optional quiet-mode hook selection: " + hook);
         }
+        check(calls.getOrDefault("menuNotifiable", 0) == (readOnly ? 0 : 2),
+                "Optional quiet-mode presentation hooks (chat menu + chat list)");
         check(calls.getOrDefault("allowMuted", 0) == (readOnly ? 0 : 2), "Optional native per-room notification gates");
         check(calls.getOrDefault("interceptNotificationMute", 0) == 0, "No duplicate old service dispatch hook");
         Method saved = find("Luq8/z2;", "f", "Lts8/od;JLtq8/r;Ljava/lang/String;Lso8/m;ZZJ", "V");
@@ -165,6 +167,31 @@ public final class ApkContractTest {
         FiveRegisterInstruction menuStateHook = (FiveRegisterInstruction) menuStateHooks.get(0);
         check(menuStateHook.getRegisterC() == 1 && menuStateHook.getRegisterD() == 13,
                 "Menu-state hook receives the chat ID and native notifiable flag");
+        field("Lcom/linecorp/rxeventbus/d;", "a", "Lcom/linecorp/rxeventbus/d$a;");
+        method("Lcom/linecorp/rxeventbus/d;", "b", "Ljava/lang/Object;", "V");
+        field("Lxe8/b;", "CHAT_LIST", "Lxe8/b;");
+        Method chatListItem = find("Lf22/i;", "<init>",
+                "Ljava/lang/String;Ljava/lang/String;ZZZZLjp/naver/line/android/model/ChatData$c;"
+                + "Ljava/lang/String;Lyk8/z;Ljava/lang/Long;IZZZZZ", "V");
+        List<Instruction> chatListStateHooks = callsTo(chatListItem, ext + "Settings;", "menuNotifiable");
+        check(chatListStateHooks.size() == 1 && chatListStateHooks.get(0) instanceof FiveRegisterInstruction,
+                "Local quiet state is applied to chat-list UI model");
+        FiveRegisterInstruction chatListStateHook = (FiveRegisterInstruction) chatListStateHooks.get(0);
+        check(chatListStateHook.getRegisterC() == 1 && chatListStateHook.getRegisterD() == 6,
+                "Chat-list state hook receives the chat ID and native notifiable flag");
+        Method chatListToggle = find("Ld42/d;", "u3", "Lf22/l;", "V");
+        List<Instruction> chatListToggleHooks = callsTo(chatListToggle, ext + "Settings;", "interceptChatListToggle");
+        check(chatListToggleHooks.size() == 1 && chatListToggleHooks.get(0) instanceof FiveRegisterInstruction,
+                "Chat-list long-press ordinary-chat mute toggle is intercepted");
+        FiveRegisterInstruction chatListToggleHook = (FiveRegisterInstruction) chatListToggleHooks.get(0);
+        check(chatListToggleHook.getRegisterC() == 0,
+                "Chat-list toggle hook receives the ordinary chat ID");
+        check(callsTo(chatListToggle, "Ld42/l;", "<init>").size() == 1,
+                "Native ordinary chat-list toggle remains available when interception is disabled");
+        check(callsTo(chatListToggle, "Ld42/n;", "<init>").size() == 1,
+                "Native OpenChat chat-list toggle remains available");
+        check(callsTo(chatListToggle, "Ld42/m;", "<init>").size() == 1,
+                "Native ServiceChat chat-list toggle remains available");
         }
         ClassDef click = classes.get(ext + "SettingsClick;");
         check(click != null && click.getInterfaces().size() == 3, "Settings callback has native function interfaces + Serializable");

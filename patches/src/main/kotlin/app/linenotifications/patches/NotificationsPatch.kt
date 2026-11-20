@@ -320,6 +320,65 @@ val notTooMuchSilentPatch = bytecodePatch(
             move-result v13
         """)
 
+        // Chat-list UI model (presentation only): reflects local quiet state in the
+        // muted bell icon and long-press menu label without altering LINE's stored model.
+        val chatListItem = mutableClassDefBy("Lf22/i;").methods.single {
+            it.name == "<init>" && it.parameterTypes.map(CharSequence::toString) == listOf(
+                "Ljava/lang/String;", "Ljava/lang/String;", "Z", "Z", "Z", "Z",
+                "Ljp/naver/line/android/model/ChatData\$c;", "Ljava/lang/String;", "Lyk8/z;",
+                "Ljava/lang/Long;", "I", "Z", "Z", "Z", "Z", "Z"
+            )
+        }
+        val chatListNotifiable = chatListItem.implementation!!.instructions.withIndex().single { (_, instruction) ->
+            val field = (instruction as? ReferenceInstruction)?.reference as? FieldReference
+            instruction.opcode == Opcode.IPUT_BOOLEAN && field?.definingClass == "Lf22/i;" && field.name == "f"
+        }
+        val chatListAssign = chatListNotifiable.value as TwoRegisterInstruction
+        if (chatListItem.implementation!!.registerCount != 17 || chatListNotifiable.index != 10
+            || chatListAssign.registerA != 6 || chatListAssign.registerB != 0) {
+            throw PatchException("Native chat-list notification presentation layout changed")
+        }
+        chatListItem.addInstructions(chatListNotifiable.index, """
+            invoke-static {v1, v6}, $LINE_SETTINGS->menuNotifiable(Ljava/lang/String;Z)Z
+            move-result v6
+        """)
+
+        // Chat-list long-press mute/unmute toggle for ordinary chats (Lf22/j). OpenChat
+        // (Lf22/z) and ServiceChat (Lf22/w) remain on their native branches.
+        val chatListToggle = mutableClassDefBy("Ld42/d;").methods.single {
+            it.name == "u3" && it.parameterTypes.map(CharSequence::toString) == listOf("Lf22/l;") && it.returnType == "V"
+        }
+        val chatListBody = chatListToggle.implementation!!.instructions.toList()
+        val chatListIdLoad = chatListBody[21] as? TwoRegisterInstruction
+        val chatListIdField = (chatListBody[21] as? ReferenceInstruction)?.reference as? FieldReference
+        if (chatListToggle.implementation!!.registerCount != 7
+            || chatListBody[16].opcode != Opcode.INSTANCE_OF
+            || (chatListBody[16] as? ReferenceInstruction)?.reference?.let { (it as? TypeReference)?.type } != "Lf22/j;"
+            || chatListBody[19].call()?.let { it.definingClass == "Lf22/j;" && it.name == "f" } != true
+            || chatListIdLoad?.opcode != Opcode.IGET_OBJECT || chatListIdLoad.registerA != 0 || chatListIdLoad.registerB != 0
+            || chatListIdField?.definingClass != "Lf22/i;" || chatListIdField.name != "a"
+            || chatListBody[29].call()?.let { it.definingClass == "Ld42/l;" && it.name == "<init>" } != true) {
+            throw PatchException("Native chat-list notification toggle layout changed")
+        }
+        chatListToggle.addInstructionsWithLabels(22, """
+            invoke-static {v0}, $LINE_SETTINGS->interceptChatListToggle(Ljava/lang/String;)Z
+            move-result v3
+            if-eqz v3, :native_chat_list_toggle
+            return-void
+        """, ExternalLabel("native_chat_list_toggle", chatListToggle.getInstruction(22)))
+
+        // Pin the global event bus contract used to refresh the chat list after quiet toggles.
+        if (classDefBy("Lcom/linecorp/rxeventbus/d;").fields.none {
+                it.name == "a" && it.type == "Lcom/linecorp/rxeventbus/d\$a;" && AccessFlags.PUBLIC.isSet(it.accessFlags)
+            } || classDefBy("Lcom/linecorp/rxeventbus/d;").methods.none {
+                it.name == "b" && it.parameterTypes.map(CharSequence::toString) == listOf("Ljava/lang/Object;")
+                    && it.returnType == "V" && AccessFlags.PUBLIC.isSet(it.accessFlags)
+            } || classDefBy("Lxe8/b;").fields.none {
+                it.name == "CHAT_LIST" && it.type == "Lxe8/b;" && AccessFlags.PUBLIC.isSet(it.accessFlags)
+            }) {
+            throw PatchException("Native chat-list refresh event bus changed")
+        }
+
         val menu = mutableClassDefBy("Lcom/linecorp/chathistory/menu/ChatHistoryMenuFragment;").methods.single { it.name == "onViewCreated" }
         val calls = menu.implementation!!.instructions.withIndex().filter { (_, i) ->
             i.call()?.let { it.definingClass == "Lji8/f;" && it.name == "n" && it.parameterTypes.map(CharSequence::toString) == listOf("Ljava/util/Collection;") } == true

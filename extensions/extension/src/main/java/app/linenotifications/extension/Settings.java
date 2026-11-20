@@ -68,6 +68,9 @@ public final class Settings {
     public static boolean interceptToggle(Object fragment, Object callback) {
         return ChatNotifications.interceptToggle(fragment, callback);
     }
+    public static boolean interceptChatListToggle(String chat) {
+        return ChatNotifications.interceptChatListToggle(chat);
+    }
     public static boolean interceptNotificationMute(Context context, Intent intent) {
         if (!enabled(SILENT) || intent == null || !"jp.naver.line.android.access.remote.action.MUTE_CURRENT_CHAT_ACTION".equals(intent.getAction())) return false;
         String chat = intent.getStringExtra("chatId");
@@ -122,7 +125,10 @@ public final class Settings {
 
     static void setEnabled(String key, boolean checked) {
         prefs().edit().putBoolean(key, checked).apply();
-        if (checked && SILENT.equals(key)) pruneHiddenNotifications();
+        if (SILENT.equals(key)) {
+            if (checked) pruneHiddenNotifications();
+            ChatNotifications.refreshChatList();
+        }
         if (READ.equals(key)) Notifications.refreshReadActions();
     }
 
