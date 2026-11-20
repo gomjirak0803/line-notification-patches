@@ -1,4 +1,18 @@
-# 공개 상태 — 2026-11-18
+# 공개 상태 — 2026-11-20
+
+## 최신 릴리스 (`v0.1.9-dev`)
+
+- 저장소: https://github.com/gomjirak0803/line-notification-patches
+- 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.9-dev
+- Manager 추가: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
+- 빌드 실행: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44698544166 (성공, 1m3s)
+- 릴리스 소스 커밋: `950a9d4ea3dedbcdf3d22610ac8b0446b79dd399` (메타데이터 갱신 커밋: `131990a`)
+
+공개 MPP의 SHA-256은 `45cd8e71747a67552e21ef9b0782107cc50da2db35f791efdf7f2adaf9cfdbcb`이며 131,929바이트입니다. GitHub API의 asset digest·`SHA256SUMS.txt`·직접 내려받은 파일 해시가 일치했습니다. S10e 실기기 시험본 `7d34bdd0f028b728f315919692e8a2eb9dc5c6c4197f7c338b23dd874bf2d401`과 ZIP 항목별(18개)로 비교한 결과, 실행 클래스·DEX·확장·Manifest·리소스는 모두 동일하며 차이는 `THIRD_PARTY_NOTICES.md`의 줄바꿈(CRLF/LF)뿐입니다. 같은 버전 소스 ZIP의 SHA-256은 `dd49cb237dc064a2c14c5c22cb9f0e02d425a80a01c64eb4d3b55ec6ed15cde3`입니다.
+
+S10e의 Morphe Manager `2.6.0`에서 기존 원격 소스(`0.1.8-dev`)의 `업데이트`를 눌러 **`0.1.8-dev → 0.1.9-dev` 원격 자동 업데이트**가 `main/patches-bundle.json`(`"created_at": "2026-11-20T07:56:27"`) 파싱 → GitHub Releases `line-notification-patches-0.1.9-dev.mpp` 다운로드 → 버전 `0.1.9-dev` 반영까지 오류 없이 완료됨을 확인했습니다.
+
+## 이전 릴리스 기록 (`v0.1.8-dev`, 2026-11-18)
 
 - 저장소: https://github.com/gomjirak0803/line-notification-patches
 - 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.8-dev
