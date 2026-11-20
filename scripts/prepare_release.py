@@ -14,7 +14,7 @@ def main():
     run([java,"-cp",os.pathsep.join([str(helper),str(runtime),str(compiler/"kotlin-stdlib.jar")]),"util.PatchListGeneratorKt",bundle,ROOT/"patches-list.json"])
     listing=json.loads((ROOT/"patches-list.json").read_text());assert listing["version"]==VERSION and len(listing["patches"])==6
     url=f"https://github.com/{REPO}/releases/download/v{VERSION}"
-    metadata={"created_at":datetime.now(timezone.utc).isoformat(),"description":"Experimental LINE 26.16.0 notification patches; tested on Samsung S10e Android 12.","download_url":url+"/"+bundle.name,"signature_download_url":"","version":VERSION}
+    metadata={"created_at":datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),"description":"Experimental LINE 26.16.0 notification patches; tested on Samsung S10e Android 12.","download_url":url+"/"+bundle.name,"signature_download_url":"","version":VERSION}
     (ROOT/"patches-bundle.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
     out=ROOT/"artifacts/publish";out.mkdir(parents=True,exist_ok=True)
     import shutil
