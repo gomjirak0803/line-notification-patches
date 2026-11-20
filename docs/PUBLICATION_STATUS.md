@@ -1,61 +1,54 @@
-# 공개 상태 — 2026-11-20
+# Publication Status — 2026-11-20
 
-## 최신 릴리스 (`v0.1.11-dev`)
+## Latest release (`v0.1.11-dev`)
 
-- 저장소: https://github.com/gomjirak0803/line-notification-patches
-- 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.11-dev
-- Manager 추가: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-- 빌드 실행: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44724380693 (성공, 1m12s)
-- 릴리스 소스 커밋: `0a34c85f49ff67ad40fc0d1bf7899e0da3defa4b` (메타데이터 갱신 커밋: `1d0d45f`)
+* **Repository**: https://github.com/gomjirak0803/line-notification-patches
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.11-dev
+* **Add in Morphe Manager**: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44724380693 (success, 1m 12s)
+* **Source commit**: `0a34c85f49ff67ad40fc0d1bf7899e0da3defa4b` (metadata commit: `1d0d45f`)
 
-공개 MPP의 SHA-256은 `2eb3a9df3113c288549ddcc1c495a868c307e585fbeb146a05af855743cbb891`이며 129,907바이트입니다. `SHA256SUMS.txt`·직접 내려받은 파일 해시가 일치했고, 로컬 빌드 `e8cd50e81f6133f2561d18e78ad46ebe96b239e7a11aec3a353447d29a865f57`과 ZIP 항목별(17개) 대조 결과 실행 클래스·DEX·확장·Manifest는 모두 동일하며 차이는 `THIRD_PARTY_NOTICES.md` 줄바꿈(CRLF/LF)뿐입니다. 같은 버전 소스 ZIP의 SHA-256은 `9026b7fc0fd8fa28b9c5122217bfa29a4ccc2df7cb876abf3c48936beaca5d59`입니다. `main/patches-bundle.json`은 `"created_at": "2026-11-20T11:04:15"`, `"version": "0.1.11-dev"`로 갱신됐으며 `tests/test_bundle_metadata.py` 3개 검사를 통과했습니다.
+The published `line-notification-patches-0.1.11-dev.mpp` is `129,907` bytes with SHA-256 `2eb3a9df3113c288549ddcc1c495a868c307e585fbeb146a05af855743cbb891`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 17 ZIP entries against the local build (`e8cd50e81f6133f2561d18e78ad46ebe96b239e7a11aec3a353447d29a865f57`) confirmed byte-for-byte parity across every executable class, DEX, extension, and manifest (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The corresponding source archive SHA-256 is `9026b7fc0fd8fa28b9c5122217bfa29a4ccc2df7cb876abf3c48936beaca5d59`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-20T11:04:15"` and `"version": "0.1.11-dev"`, passing all 3 tests in `tests/test_bundle_metadata.py`.
 
-## 이전 릴리스 기록 (`v0.1.10-dev`, 2026-11-20)
+## Previous releases
 
-- 저장소: https://github.com/gomjirak0803/line-notification-patches
-- 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.10-dev
-- Manager 추가: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-- 빌드 실행: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44716250040 (성공, 1m4s)
-- 릴리스 소스 커밋: `5212f2f6258828ad1e789e123ad75b1b7df77429` (메타데이터 갱신 커밋: `38a6376`)
+### `v0.1.10-dev` (2026-11-20)
 
-공개 MPP의 SHA-256은 `29e2bad20b46db8b731b928cfde5096c1dbd9de202d25655d792389454a4a186`이며 125,636바이트입니다. `SHA256SUMS.txt`·직접 내려받은 파일 해시가 일치했고, S10e 실기기 시험본 `126d6d972ecf75f4dd439197c78c472b5739f23cad21f5fcf9af2351c3219453`과 ZIP 항목별(17개) 대조 결과 실행 클래스·DEX·확장·Manifest는 모두 동일하며 차이는 `THIRD_PARTY_NOTICES.md` 줄바꿈(CRLF/LF)뿐입니다. 같은 버전 소스 ZIP의 SHA-256은 `9e519a465954b6dc6cff4e8e03181d8355fc4571c470f45dc587a1fe1b83ffd5`입니다. `main/patches-bundle.json`은 `"created_at": "2026-11-20T10:06:33"`, `"version": "0.1.10-dev"`로 갱신됐으며 `tests/test_bundle_metadata.py` 3개 검사를 통과했습니다.
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.10-dev
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44716250040 (success, 1m 4s)
+* **Source commit**: `5212f2f6258828ad1e789e123ad75b1b7df77429` (metadata commit: `38a6376`)
+* **Published MPP** (`125,636` bytes): `29e2bad20b46db8b731b928cfde5096c1dbd9de202d25655d792389454a4a186` (ZIP entry parity across all 17 entries with S10e-tested bundle `126d6d972ecf75f4dd439197c78c472b5739f23cad21f5fcf9af2351c3219453`, differing only in `THIRD_PARTY_NOTICES.md` line endings).
+* **Source ZIP SHA-256**: `9e519a465954b6dc6cff4e8e03181d8355fc4571c470f45dc587a1fe1b83ffd5`.
+* `main/patches-bundle.json`: `"created_at": "2026-11-20T10:06:33"`, `"version": "0.1.10-dev"`.
 
-## 이전 릴리스 기록 (`v0.1.9-dev`, 2026-11-20)
+### `v0.1.9-dev` (2026-11-20)
 
-- 저장소: https://github.com/gomjirak0803/line-notification-patches
-- 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.9-dev
-- Manager 추가: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-- 빌드 실행: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44698544166 (성공, 1m3s)
-- 릴리스 소스 커밋: `950a9d4ea3dedbcdf3d22610ac8b0446b79dd399` (메타데이터 갱신 커밋: `131990a`)
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.9-dev
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44698544166 (success, 1m 3s)
+* **Source commit**: `950a9d4ea3dedbcdf3d22610ac8b0446b79dd399` (metadata commit: `131990a`)
+* **Published MPP** (`131,929` bytes): `45cd8e71747a67552e21ef9b0782107cc50da2db35f791efdf7f2adaf9cfdbcb` (ZIP entry parity across all 18 entries with S10e-tested bundle `7d34bdd0f028b728f315919692e8a2eb9dc5c6c4197f7c338b23dd874bf2d401`, differing only in `THIRD_PARTY_NOTICES.md` line endings).
+* **Source ZIP SHA-256**: `dd49cb237dc064a2c14c5c22cb9f0e02d425a80a01c64eb4d3b55ec6ed15cde3`.
+* Verified live remote auto-update (`0.1.8-dev → 0.1.9-dev`) in Morphe Manager `2.6.0` on Galaxy S10e (`main/patches-bundle.json` `"created_at": "2026-11-20T07:56:27"` → GitHub Releases download → `0.1.9-dev` active).
 
-공개 MPP의 SHA-256은 `45cd8e71747a67552e21ef9b0782107cc50da2db35f791efdf7f2adaf9cfdbcb`이며 131,929바이트입니다. GitHub API의 asset digest·`SHA256SUMS.txt`·직접 내려받은 파일 해시가 일치했습니다. S10e 실기기 시험본 `7d34bdd0f028b728f315919692e8a2eb9dc5c6c4197f7c338b23dd874bf2d401`과 ZIP 항목별(18개)로 비교한 결과, 실행 클래스·DEX·확장·Manifest·리소스는 모두 동일하며 차이는 `THIRD_PARTY_NOTICES.md`의 줄바꿈(CRLF/LF)뿐입니다. 같은 버전 소스 ZIP의 SHA-256은 `dd49cb237dc064a2c14c5c22cb9f0e02d425a80a01c64eb4d3b55ec6ed15cde3`입니다.
+### `v0.1.8-dev` (2026-11-18)
 
-S10e의 Morphe Manager `2.6.0`에서 기존 원격 소스(`0.1.8-dev`)의 `업데이트`를 눌러 **`0.1.8-dev → 0.1.9-dev` 원격 자동 업데이트**가 `main/patches-bundle.json`(`"created_at": "2026-11-20T07:56:27"`) 파싱 → GitHub Releases `line-notification-patches-0.1.9-dev.mpp` 다운로드 → 버전 `0.1.9-dev` 반영까지 오류 없이 완료됨을 확인했습니다.
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.8-dev
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44096981707 (success)
+* **Source commit**: `41d58b1fc62190af00a532223296c0a362da4a3a`
+* **Published MPP** (`127,693` bytes): `45233180b1accc88e4ad0f37bc643a60db9a6792df9a5d5b83e21dfeca146a85` (ZIP parity with S10e-tested bundle `9fcb3100f2e09933c8ac48226d7fb88ebf42cf8b13cbc15d786c9cf3ef39a168`).
+* **Source ZIP SHA-256**: `5a5b03cebe4b71232ec4c72cb21eb37e71f45a4ba35ffc9cecc95a05b4adcee1`.
+* Verified download and 6-patch loading via Morphe Desktop 2.1.1 / Patcher 2.3.0 with `--prerelease -x`.
 
-## 이전 릴리스 기록 (`v0.1.8-dev`, 2026-11-18)
+Every release includes the `.mpp`, matching source ZIP, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, `patches-list.json`, `patches-bundle.json`, and `SHA256SUMS.txt`. Original/patched LINE APKs/APKMs, signing keys, account DBs, and private device logs/screenshots are excluded. Bundle publisher signatures are not yet configured; `SHA256SUMS.txt` provides integrity comparison only.
 
-- 저장소: https://github.com/gomjirak0803/line-notification-patches
-- 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.8-dev
-- Manager 추가: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-- 빌드 실행: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44096981707 (성공)
-- 릴리스 소스 커밋: `41d58b1fc62190af00a532223296c0a362da4a3a`
+## Android Morphe Manager `2.6.0` on-device verification — 2026-11-20
 
-공개 MPP의 SHA-256은 `45233180b1accc88e4ad0f37bc643a60db9a6792df9a5d5b83e21dfeca146a85`이며 127,693바이트입니다. GitHub API의 asset digest와 직접 내려받은 파일의 해시가 일치했습니다. 실기기 시험본 `9fcb3100f2e09933c8ac48226d7fb88ebf42cf8b13cbc15d786c9cf3ef39a168`과 ZIP 항목별로 비교했으며, 실행 클래스·DEX·Manifest·리소스는 모두 같습니다. 차이는 THIRD_PARTY_NOTICES.md의 줄바꿈뿐입니다. 같은 버전 소스 ZIP의 SHA-256은 `5a5b03cebe4b71232ec4c72cb21eb37e71f45a4ba35ffc9cecc95a05b4adcee1`입니다.
+Tested on Galaxy S10e (`SM-G970N`, Android 12 / API 31) with `app.morphe.manager` `2.6.0` (`versionCode 39922687`), without overwriting the existing LINE installation:
 
-릴리스에는 MPP, 대응 소스 ZIP, LICENSE, NOTICE, THIRD_PARTY_NOTICES.md, 패치 목록·원격 메타데이터, SHA256SUMS.txt를 올렸습니다. 원본/패치된 LINE APK·APKM, 개인키, 계정 DB, 기기 로그·대화 화면은 공개 파일에서 제외했습니다. MPP 배포자 서명은 아직 없으며 SHA-256은 무결성 비교용입니다.
-
-Morphe Desktop 2.1.1 / Patcher 2.3.0에서 공개 저장소 주소와 `--prerelease -x`로 실제 다운로드·패치 6개 로딩에 성공했습니다. Desktop은 dev 쪽의 JSON이 없을 때 GitHub Releases API로 사전 릴리스를 가져왔습니다. main의 공개 JSON과 패치 6개 목록도 확인했습니다. Manager에서는 Pre-release patches와 Experimental app versions를 켜세요.
-
-## Android Morphe Manager 2.6.0 실기기 검증 — 2026-11-20
-
-Galaxy S10e(SM-G970N, Android 12/API 31)에 설치된 `app.morphe.manager` `2.6.0` (`versionCode 39922687`)으로 실제 원격 추가와 로컬 적용을 시험했습니다. 기존 설치된 LINE(`lastUpdateTime 2026-11-17 22:31:21`)은 덮어쓰지 않고 보존했습니다.
-
-1. **원격 소스 추가 실패 원인 확인 및 수정 완료 (`2da3dba6`)**:
-   - `https://github.com/gomjirak0803/line-notification-patches`를 원격 소스로 추가하면 Manager는 `https://raw.githubusercontent.com/gomjirak0803/line-notification-patches/main/patches-bundle.json`으로 변환해 조회합니다. `Pre-release 패치`가 켜져 있으면 `dev/patches-bundle.json`도 함께 조회하며, 현재 `dev` 브랜치가 없어 404가 발생합니다.
-   - Morphe Desktop과 달리 **Morphe Manager 2.6.0은 GitHub Releases API로 폴백하지 않으며**, 기존 `main/patches-bundle.json`의 `created_at` 값(`2026-11-17T13:52:42.238676+00:00`)을 `java.time.LocalDateTime.parse`로 파싱하는 `LocalDateTimeSerializer`에서 `+00:00` 오프셋(index 26) 때문에 `DateTimeParseException` / `JsonDecodingException`이 발생했습니다. 그 결과 수정 전에는 `Pre-release 패치` 켜짐·꺼짐 모두 `이름 없음 / 메타데이터 없음`(`패치 0`, `버전 N/A`)으로 실패했습니다.
-   - 공식 `MorpheApp/morphe-patches` 형식(`YYYY-MM-DDTHH:MM:SS`)에 맞춰 `scripts/prepare_release.py`와 `patches-bundle.json`을 `strftime("%Y-%m-%dT%H:%M:%S")`로 수정하고 회귀 테스트(`tests/test_bundle_metadata.py`)를 추가해 `main`에 반영(`2da3dba6c9238bcfdcea1683a3cdcea713f93d3d`)했습니다.
-   - 반영 직후 S10e Morphe Manager 2.6.0에서 원격 소스 업데이트를 재시험한 결과, **`Pre-release 패치` 꺼짐·켜짐 모두** GitHub Releases의 `line-notification-patches-0.1.8-dev.mpp` 다운로드 및 `LINE notification patches` (`0.1.8-dev`, 패치 6개, 앱 1개) 인식에 성공했습니다(`Pre-release` 켜짐 시 `dev/patches-bundle.json` 404 뒤 유효한 `main/patches-bundle.json`을 사용). 로컬 복사본 소스를 제거한 뒤에도 원격 소스만으로 홈 화면에 `LINE` (`26.16.0` / `261600106`, 권장·실험 버전)이 오류 배너 없이 정상 표시됨을 확인했습니다.
-2. **26.16.0 APKM 실기기 패치 성공**:
-   - `설정 → 전문가 모드`와 `실험 앱 버전`을 켠 뒤 원본 ARM64 APKM(`26.16.0` / `261600106`)을 선택해 6개 패치 전체를 적용했습니다. 분할 APK 4개 병합, 6개 패치 모두 성공, 리소스 재컴파일 및 서명까지 총 28.5초(`output.apk` 221,809,392바이트)로 오류 없이 완료됐습니다. 설치 단계는 실행하지 않았습니다.
-
-커뮤니티 인덱스 등록 요청은 **제출하지 않았습니다**. 사용자가 GitHub 배포만 유지하도록 선택했습니다. GitHub 저장소와 직접 추가 링크는 인덱스 등재 없이 사용할 수 있습니다.
+1. **Remote source metadata compatibility fix (`2da3dba6`)**:
+   * Adding `https://github.com/gomjirak0803/line-notification-patches` causes Morphe Manager to fetch `https://raw.githubusercontent.com/gomjirak0803/line-notification-patches/main/patches-bundle.json` (and `dev/patches-bundle.json` when Pre-release patches is enabled).
+   * Unlike Morphe Desktop, Morphe Manager `2.6.0` does not fall back to the GitHub Releases API, and its `LocalDateTimeSerializer` uses `java.time.LocalDateTime.parse`, which rejected timezone offsets (`+00:00`) with `DateTimeParseException` / `JsonDecodingException`.
+   * Updated `scripts/prepare_release.py` and `patches-bundle.json` to emit UTC `YYYY-MM-DDTHH:MM:SS` without offset and added regression tests in `tests/test_bundle_metadata.py`.
+   * Re-verified on S10e Morphe Manager `2.6.0`: remote source fetching and updates succeeded with both **Pre-release patches** OFF and ON, showing `LINE` (`26.16.0` / `261600106`, 6 patches) without error banners.
+2. **On-device LINE `26.16.0` APKM patching**:
+   * With **Expert mode** and **Experimental app versions** enabled, patched the official ARM64 APKM (`26.16.0` / `261600106`) with all 6 patches: merged 4 split APKs, applied 6/6 patches, recompiled resources, and signed in 28.5s (`output.apk` 221,809,392 bytes). Did not install over the existing app.

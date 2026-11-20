@@ -1,12 +1,12 @@
-LINE 26.16.0 (261600106)용 독립 실험 패치입니다. Morphe Patcher 2.3.0이 필요합니다.
+Independent experimental Morphe patches for LINE 26.16.0 (`versionCode 261600106`). Requires Morphe Patcher 2.3.0.
 
-- 조용히 받기·완전 숨김, 대화형 알림과 전체 미확인 수, 추천 답장 제거, 방 전체 읽음을 제공합니다.
-- 0.1.11은 `More Chat Info`로 펼친 대화형 알림(`MessagingStyle`)에 발신자 프로필 사진을 표시합니다. 1:1 채팅은 원본 알림 아이콘을 재사용하고, 그룹 채팅 다중 발신자는 `contacts.picture_path`와 LINE의 Glide 로컬 캐시 전용(`onlyRetrieveFromCache(true)`)으로 읽어 추가 네트워크 요청 없이 표시합니다.
-- S10e Android 12 실기기에서 펼친 알림 프로필 사진 정상 표시와 ARM64/Universal 1,075개 정적 계약 검사를 확인했습니다. 상세 범위는 docs/DEVICE_TESTS.md를 확인하세요.
-- Restore push registration은 Firebase 등록의 인증서 식별값을 변경하는 별도 선택 패치입니다.
-- 원본·패치된 전체 LINE APK와 서명키는 배포하지 않습니다. 원본 APKM은 사용자가 준비합니다.
-- GPL-3.0 및 NOTICE 추가 조건을 적용하며 대응 소스·빌드 방법·타사 출처를 함께 제공합니다.
-- 배포자 서명은 아직 없습니다. SHA256SUMS는 파일 비교용입니다.
+- Features: `Not Too Much Silent` (local quiet mode + complete hide), `More Chat Info` (Android `MessagingStyle` conversation preview + native total unread count), `No reply` (hides smart-reply chips while keeping manual inline reply), `Mark as read` (marks whole regular chat read via LINE's native chat-list updater), and optional `Restore push registration`.
+- **0.1.11-dev**: Displays sender profile avatars inside expanded `More Chat Info` notifications—reusing LINE's original notification icon for 1:1 chats and reading LINE's local Glide cache only (`onlyRetrieveFromCache(true)`) for multi-sender group chats with zero additional network requests. Also moves trailing 400ms active-notification refreshes to a background worker thread.
+- Verified on Samsung Galaxy S10e (Android 12 / One UI 4.1) for real-device expanded avatar rendering, plus 1,075 static APK contract assertions (ARM64 & Universal, including 11 Glide cache-only bindings). See `docs/DEVICE_TESTS.md` for full verification scope including Android 16 (API 36) emulator and Galaxy S22 Ultra (One UI 8.0) diagnostic results.
+- `Restore push registration` is an optional, default-off patch that overrides only the `X-Android-Cert` header on Firebase Installations requests.
+- Original/patched LINE APKs, APKMs, and signing keys are never distributed. Provide your own official LINE 26.16.0 APKM.
+- Licensed under GPL-3.0 with `NOTICE` and `THIRD_PARTY_NOTICES.md`; corresponding source archive and build scripts are included.
+- Bundle publisher signatures are not yet enabled; `SHA256SUMS.txt` is provided for file integrity comparison.
 
-Sources → + → Remote에서 https://github.com/gomjirak0803/line-notification-patches 를 추가하세요.
-Pre-release patches와 Experimental app versions를 켜고 원본 LINE 26.16.0 APKM에 적용하세요.
+Add via **Sources → + → Remote**: `https://github.com/gomjirak0803/line-notification-patches`
+Enable **Pre-release patches** and **Experimental app versions**, then patch your official LINE 26.16.0 APKM in Expert mode.

@@ -1,237 +1,80 @@
-# Android 실기기 검증표
+# Device & Cross-Environment Test Matrix
 
-## 0.1.11-dev 펼친 알림 프로필 사진(로컬 캐시 전용) 검증 — 2026-11-20
+## `0.1.11-dev` Expanded notification sender avatars (local cache only) — 2026-11-20
 
-`More Chat Info`의 `ConversationPreview`(`MessagingStyle`)에서 각 `Person`에 발신자 프로필 `Icon`을 연결했습니다. 1:1 채팅은 LINE 원본 알림의 `largeIcon` / `sender_person` 아이콘을 재사용하고, 그룹 채팅 다중 발신자는 `contacts` DB `picture_path`와 LINE의 Glide 로컬 캐시 전용(`onlyRetrieveFromCache(true)`, `DiskCacheStrategy.DATA`, `circleCrop()`, 최대 8명, `64~128px`, 150ms 타임아웃)으로 읽어 추가 네트워크 요청 없이 표시합니다. 400ms 지연 갱신(`deferRefresh`)도 백그라운드 워커 스레드로 이동했습니다.
+Added sender profile `Icon` support to `ConversationPreview` (`Notification.MessagingStyle`): 1:1 chats reuse LINE's original `largeIcon`/`sender_person` icon, while multi-sender group chats read `contacts.picture_path` and LINE's local Glide cache exclusively (`onlyRetrieveFromCache(true)`, `DiskCacheStrategy.DATA`, `circleCrop()`, max 8 distinct senders, `64–128px`, 150ms timeout) with zero network requests. Moved trailing 400ms active-notification refreshes (`deferRefresh`) onto a background worker thread.
 
-정책 86개·Python 단위 테스트 15개, 두 APKM 각각 정적 계약 1,075개, 읽음 단독 선택 검사 1,035개(Glide 캐시 바인딩 11개 포함)를 통과했습니다. S10e(SM-G970N, Android 12/API 31)에 동일 서명 테스트 APK(`8316d127e41f5e1a449717e464c42e00c6742833efe406cfaccd9b9b8ebed6fb`)를 설치해 사용자가 실제 메시지로 펼친 알림 프로필 사진 정상 표시를 확인했습니다.
+* **Automated checks**: 86 `NotificationPolicy` assertions, 15 Python unit tests, 1,075 static APK contracts (ARM64), 1,075 static APK contracts (Universal), 1,035 static contracts (`Mark as read`-only), including 11 pinned Glide cache-only bindings.
+* **Physical S10e (`SM-G970N`, Android 12 / API 31)**: Installed signed same-key APK (`8316d127e41f5e1a449717e464c42e00c6742833efe406cfaccd9b9b8ebed6fb`); user confirmed real-message expanded notifications display sender profile photos properly.
 
-## 0.1.10-dev Android 15/16 Edge-to-Edge 수정·안정성 정리 검증 — 2026-11-20
+## `0.1.10-dev` Android 15/16 Edge-to-Edge fix & stability hardening — 2026-11-20
 
-`SettingsPage`의 edge-to-edge 인셋 적용(`setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener` + `WindowInsets.CONSUMED`), `More Chat Info` DB 조회 예외 격리·`server_id` 비숫자 방어, `Settings.java` `extras != null` 방어 및 미사용 `NativeLine.chat` 제거, 미사용 `NotificationBadgeResources.kt` 제거를 반영했습니다. 정책 86개·Python 단위 테스트 15개, 두 APKM 각각 정적 계약 1,011개, 읽음 단독 선택 검사 971개를 통과했습니다.
+Fixed `SettingsPage` edge-to-edge overlap (`setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener` returning `WindowInsets.CONSUMED`), isolated `More Chat Info` preview/DB exceptions from hidden-room fail-closed suppression, added `server_id` non-numeric and `extras != null` guards, removed unused `NotificationBadgeResources.kt`, and added `/HANDOFF.md` to `.gitignore`.
 
-### S10e (SM-G970N, Android 12 / API 31 / One UI 4.1) 실기기 회귀
-| 0.1.10-dev S10e 실기기 항목 | 결과 |
+* **Automated checks**: 86 policy assertions, 15 Python unit tests, 1,011 ARM64 contracts, 1,011 Universal contracts, 971 `Mark as read`-only contracts.
+* **Bundle SHA-256**: `126d6d972ecf75f4dd439197c78c472b5739f23cad21f5fcf9af2351c3219453`. **APK SHA-256**: `f00228785e7857a3d525bb85acf19636c5cb4f1bd71904d59769e268fbe30bff`.
+
+### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1) regression
+| Check | Result |
 | --- | --- |
-| 동일 서명 업데이트 | 설치 성공, 설치본 `base.apk` SHA-256 일치(`f00228785e7857a3d525bb85acf19636c5cb4f1bd71904d59769e268fbe30bff`), 기존 로그인·설정 스위치 4개 켜짐 상태 유지 |
-| `SettingsPage` 레이아웃·인셋 회귀 (API 31) | 상태바 `[0,0][1080,117]` 바로 아래 `header_root` `[0,117][1080,279]` 정렬(겹침·이중 패딩 없음, LINE 기본 설정 헤더 하단 `279`과 일치), `ScrollView` `[0,279][1080,2164]` 네비게이션바 상단 정렬, 크래시 0건 |
+| Same-key update | Installed cleanly, `base.apk` SHA-256 matched (`f0022878…`), login & all 4 switches preserved ON |
+| `SettingsPage` insets & layout (API 31) | `header_root` at `[0,117][1080,279]` directly below status bar `[0,0][1080,117]` (zero overlap, zero double-padding; matches LINE's native settings header bottom `279`), `ScrollView` `[0,279][1080,2164]` cleanly above navigation bar, 0 crashes |
 
-묶음 SHA-256: `126d6d972ecf75f4dd439197c78c472b5739f23cad21f5fcf9af2351c3219453`. APK SHA-256: `f00228785e7857a3d525bb85acf19636c5cb4f1bd71904d59769e268fbe30bff`.
+### Android 16 (API 36) cross-environment verification (Emulator + Galaxy S22 Ultra One UI 8.0 diagnostic)
 
-### Android 16 (API 36) 교차 환경 검증 — 2026-11-20 (에뮬레이터 + S22 Ultra One UI 8.0 진단)
+Tested on an **Android 16 AOSP emulator** (`pixel_api36`, API 36, `x86_64` + `arm64-v8a` translation) and a **physical Galaxy S22 Ultra** (`SM-S908N`, Android 16 / API 36 / One UI 8.0, `1440×3088 @ 600dpi`) using a standalone diagnostic app (`targetSdk=36`, running production `ConversationPreview` + `NotificationPolicy` + `LineNotificationSettingsWindow` dialog theme) and unauthenticated APK boot. Official LINE `26.18.2` on S22 Ultra was untouched, and the temporary diagnostic app was uninstalled immediately after testing.
 
-S10e(Android 12 / One UI 4.1) 외 최신 Android 15/16(`targetSdk=36`) 환경 검증을 위해 **Android 16 AOSP 에뮬레이터(`pixel_api36`, API 36, `x86_64` + `arm64-v8a` 변환)**와 **실기기 Galaxy S22 Ultra(`SM-S908N`, Android 16 / API 36 / One UI 8.0, `1440×3088 @ 600dpi`)**에서 진단 앱(실코드 `ConversationPreview`·`NotificationPolicy` 및 `SettingsPage` 동일 테마 `LineNotificationSettingsWindow`)과 패치 APK 부팅을 검증했습니다. S22 Ultra의 기존 공식 LINE(`26.18.2`)은 건드리지 않았고, 검증 직후 임시 진단 앱(`app.linenotifications.diag`)을 제거했습니다.
-
-| Android 16 (API 36) 교차 검증 항목 | 환경 | 결과 |
+| Android 16 (API 36) check | Environment | Result |
 | --- | --- | --- |
-| `SettingsPage` edge-to-edge 버그 재현 (`targetSdk=36`) | AOSP 에뮬레이터 (API 36) / S22 Ultra One UI 8.0 (API 36) | 기존 `setDecorFitsSystemWindows(true)`가 API 35+에서 무시되어 헤더가 상태바·펀치홀과 겹침 확인 (`headerTop=0`, 에뮬 `statusTop=128`, S22U `statusTop=100`, `overlapTop=true`) |
-| `SettingsPage` edge-to-edge 수정 검증 | AOSP 에뮬레이터 (API 36) / S22 Ultra One UI 8.0 (API 36) | `setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener`(`systemBars() \| displayCutout()`, `WindowInsets.CONSUMED`) 적용 후 세로(`headerTop=128` 에뮬 / `100` S22U)·가로 컷아웃(`headerLeft=128`, `headerTop=63`) 모두 `overlapTop=false`·`overlapLeft=false`, 라이트 배경 다크 상태바 아이콘 정상 확인 |
-| 순정 AOSP / One UI 8.0 알림 렌더링 (`ConversationPreview`) | AOSP 에뮬레이터 (API 36) / S22 Ultra One UI 8.0 (API 36) | 그룹 `[32]`(최근 25건 유지·연속 발신자 묶음·긴 본문 자동 줄바꿈·명시적 `\n`), 1:1 `[1]`, `읽음`/`답장` 버튼(`actions=2`), `No reply`(`mAllowSystemGeneratedContextualActions=false`, 추천 답장 칩 0개), 무음 채널(`line_notification_patches.silent.v1`, `mImportance=LOW`, `isNoisy=false`, `mIsInterruptive=false`) 확인 |
-| 잠금화면 `VISIBILITY_PRIVATE` 가림 | AOSP 에뮬레이터 (API 36) | PIN 설정 + `lock_screen_allow_private_notifications=0` 상태에서 잠금화면 평문 유출 0건(`PLAINTEXT_LEAKED: []`), `publicVersion`(`LINE / 새 메시지가 있습니다`) 확인 |
-| 패치된 LINE `0.1.9-dev` ARM64 APK 부팅 (미로그인) | AOSP 에뮬레이터 (API 36) | `arm64-v8a` 설치 및 `RegistrationActivity` 기동 성공(`FATAL`/`VerifyError`/`NoSuchMethodError`/`SecurityException` 0건; 로그인·실푸시 미수행) |
+| `SettingsPage` edge-to-edge bug repro (`targetSdk=36`) | AOSP Emulator (API 36) & S22 Ultra One UI 8.0 (API 36) | Confirmed `setDecorFitsSystemWindows(true)` is ignored on API 35+: header rendered at `y=0` underneath status bar/cutout (`statusTop=128` emu / `100` S22U, `overlapTop=true`) |
+| `SettingsPage` edge-to-edge fix | AOSP Emulator (API 36) & S22 Ultra One UI 8.0 (API 36) | Portrait (`headerTop=128` emu / `100` S22U) and landscape cutout (`headerLeft=128`, `headerTop=63`) all reported `overlapTop=false`, `overlapLeft=false`, with crisp dark status-bar icons on light background |
+| Stock AOSP & One UI 8.0 `MessagingStyle` rendering | AOSP Emulator (API 36) & S22 Ultra One UI 8.0 (API 36) | Group `[32]` (25 messages retained, consecutive sender grouping, long wrapping, explicit `\n`), 1:1 `[1]`, `읽음`/`답장` actions (`actions=2`), `No reply` (`mAllowSystemGeneratedContextualActions=false`, 0 smart-reply chips), silent channel (`line_notification_patches.silent.v1`, `mImportance=LOW`, `isNoisy=false`, `mIsInterruptive=false`) verified |
+| Lock-screen `VISIBILITY_PRIVATE` redaction | AOSP Emulator (API 36) | With PIN set and `lock_screen_allow_private_notifications=0`: `PLAINTEXT_LEAKED: []`, `publicVersion` = `LINE / 새 메시지가 있습니다` |
+| Patched LINE `0.1.9-dev` ARM64 boot (unauthenticated) | AOSP Emulator (API 36) | Installed `arm64-v8a` and launched `RegistrationActivity` cleanly (0 `FATAL`/`VerifyError`/`NoSuchMethodError`/`SecurityException`; no account login performed) |
 
-*(참고: S22 Ultra 및 에뮬레이터 검증은 진단 앱·미로그인 부팅 범위이며, 실제 LINE 계정 로그인 기반 백그라운드 FCM 수신·읽음 검증은 S10e Android 12에서 수행했습니다.)*
+*(Note: Android 16 tests cover diagnostic rendering and unauthenticated boot; live LINE account FCM push and read sync were tested on physical S10e Android 12.)*
 
-## 0.1.9-dev 채팅 목록 길게 누르기·오프라인 읽음 검증 — 2026-11-20
+## `0.1.9-dev` Chat-list long-press mute & offline read verification — 2026-11-20
 
-`Not Too Much Silent` 켜짐 상태에서 **채팅 목록 길게 누르기 메뉴(`d42.d.u3`)의 알림 끄기/켜기**와 **목록 음소거 종 아이콘·메뉴 라벨(`f22.i.f`)**을 로컬 조용히 받기에 연결했습니다. 정책 86개·Python 단위 테스트 15개(SQL 4·발송 도구 8·메타데이터 3), 두 APKM 각각 정적 계약 1,007개, 읽음 단독 선택 검사 967개를 통과했습니다.
+Extended `Not Too Much Silent` to the chat-list long-press menu (`d42.d.u3`) and chat-list bell icon/menu label (`f22.i.f`), and fixed Morphe Manager `2.6.0` remote metadata (`created_at`). Passed 86 policy assertions, 15 Python tests, 1,007 ARM64 / Universal contracts, and 967 read-only contracts. Tested on physical S10e (`SM-G970N`, API 31) targeting only the user's Official Account test room.
 
-S10e(SM-G970N, Android 12/API 31)에 동일 서명으로 데이터 보존 업데이트를 설치했고, 공식 계정 테스트 봇 방만 대상으로 아래 항목을 검증했습니다. 시험 종료 후 네트워크(`wifi_on=1`, `mobile_data=0`), 패치 스위치 4개(켜짐), 테스트 방 조용히 받기 상태, 디버그 로그(`INFO`)를 원상 복구했고 임시 자격 증명 파일은 즉시 삭제했습니다.
-
-| 0.1.9-dev 실기기 시험 항목 | 결과 |
+| `0.1.9-dev` S10e test | Result |
 | --- | --- |
-| 동일 서명 업데이트 | 설치 성공, 설치본 `base.apk` SHA-256 일치(`d7d2f083598cca6fa397e3fb8791c71781ab1cfd28467cdd23db6e62c8b5e393`), 기존 로그인·설정 유지 |
-| 채팅 목록 길게 누르기 왕복 토글·목록 아이콘 | 조용히 받기 상태에서 목록 음소거 아이콘 표시(`True`)·메뉴 `알림 켜기` → 탭 시 `toggle: chat-list menu intercepted`·`setting: normal requested`·`native delivery already matches`·즉시 아이콘 제거(`False`)·메뉴 `알림 끄기` → 재탭 시 `setting: quiet requested`·즉시 아이콘 복원(`True`)·메뉴 `알림 켜기` 확인 |
-| 목록 길게 누르기 → 무음 채널 백그라운드 수신 | 목록 길게 누르기로 `알림 끄기` 지정 후 1개 발송 시 무음 채널(`line_notification_patches.silent.v1`, `importance=2`, `[1]`, 최근 1개, `읽음` 제거) 확인 |
-| 목록 길게 누르기 → 일반 채널 백그라운드 수신 | 목록 길게 누르기로 `알림 켜기` 전환 후 1개 발송 시 기본 채널(`jp.naver.line.android.notification.NewMessages`, `importance=4`, `[1]`, `읽음` 제거) 확인 후 다시 목록 길게 누르기로 `알림 끄기` 복원 |
-| 오프라인 읽음 실행 및 네트워크 재연결 | 2개 수신(`[2]`, 최근 2개) → Wi-Fi 차단(`mobile_data=0`, `Active default network: none`) 상태에서 알림 `읽음` 실행 시 `read: native updater submitted` → `read: native completion and room cleanup`으로 로컬 알림 즉시 정리(로컬 완료이며 서버 수신 확인이 아님) → Wi-Fi 재연결(`Active default network: 102`) 후 새 1개 발송 시 `[1]`·최근 1개로 이전 오프라인 2개 본문 미혼입 확인 |
+| Same-key update | Installed cleanly, `base.apk` SHA-256 matched (`d7d2f083598cca6fa397e3fb8791c71781ab1cfd28467cdd23db6e62c8b5e393`), login & settings preserved |
+| Chat-list long-press round-trip & live icon | Quiet (`icon=True`, menu `알림 켜기`) → tap (`toggle: chat-list menu intercepted`, `setting: normal requested`, `native delivery already matches`, immediate `icon=False`, menu `알림 끄기`) → tap again (`setting: quiet requested`, immediate `icon=True`, menu `알림 켜기`) |
+| Long-press mute → silent background push | Received on `line_notification_patches.silent.v1` (`importance=2`, `[1]`, cleared via `읽음`) |
+| Long-press unmute → normal background push | Received on `jp.naver.line.android.notification.NewMessages` (`importance=4`, `[1]`, cleared via `읽음`), then restored to quiet |
+| Offline `Mark as read` + Wi-Fi reconnect | Received 2 (`[2]`) → disabled Wi-Fi (`mobile_data=0`, `Active default network: none`) → tapped `읽음` (`read: native updater submitted` → `read: native completion and room cleanup`, local notification cleared immediately) → reconnected Wi-Fi (`Active default network: 102`) → sent 1 new message → reset cleanly to `[1]` with only the new message |
 
-묶음 SHA-256: `7d34bdd0f028b728f315919692e8a2eb9dc5c6c4197f7c338b23dd874bf2d401`. APK SHA-256: `d7d2f083598cca6fa397e3fb8791c71781ab1cfd28467cdd23db6e62c8b5e393`.
+Bundle SHA-256: `7d34bdd0f028b728f315919692e8a2eb9dc5c6c4197f7c338b23dd874bf2d401`. APK SHA-256: `d7d2f083598cca6fa397e3fb8791c71781ab1cfd28467cdd23db6e62c8b5e393`.
 
-아직 미검증으로 남은 범위: 일반 사용자 간 1:1·그룹의 0.1.9 회귀(직접 답장 실제 전송 포함), 다른 Android 버전·제조사, 실제 계정 변경, 잠금화면 비공개 표시.
+## `0.1.8-dev` Automated Official Account test-bot matrix — 2026-11-18 & 2026-11-20
 
-## 0.1.8-dev 자동 봇 시험
+Tested on S10e (API 31) against the user's own Official Account test chat only (86 policy assertions, 4 SQL regression tests, 954 ARM64 / Universal contracts, 928 read-only contracts). Bundle SHA-256: `9fcb3100f2e09933c8ac48226d7fb88ebf42cf8b13cbc15d786c9cf3ef39a168`; APK SHA-256: `ca4f596a3b446e5dcdad3beefc3e958a91538eb2e40ae8966422db80489ebe37`.
 
-사용자가 공식 계정을 준비하고 자동 시험을 요청했습니다. PC 발송 창에 입력된 토큰을 표시하거나 파일로 저장하지 않고, UI의 발송 버튼으로 본인에게만 시험 문자를 보냈습니다. 테스트 봇 외 대화방은 읽지 않았습니다.
-
-- 0.1.7에서 첫 1개 수신 `[1]`·본문·읽음/답장 확인 → 읽음 버튼으로 알림 제거 → 새 2개를 한 개씩 발송해 `[2]`·본문 두 개 확인 → 다시 읽음·제거까지 통과했습니다.
-- 26개 혼합 문자를 5개씩 묶어 보냈을 때 전체 숫자 `[26]`, 긴 본문·명시적 줄바꿈·읽음/답장은 표시됐습니다. 그러나 최근 25개에는 1번이 남고 3번이 빠졌습니다. 이 자동 시험으로 0.1.7의 최근 메시지 선택 오류를 발견했습니다.
-- 원인은 `server_id`가 생성 시각 순서와 다른 묶음 발송에서 SQL이 서버 번호 기준으로 먼저 25개를 잘랐기 때문입니다. 0.1.8은 선택도 표시도 생성 시각을 우선하며 같은 시각에는 숫자 서버 ID로 순서를 정합니다. LINE의 기본 읽음 경계 조건은 유지합니다.
-- 실제 production SQL을 SQLite 회귀 데이터에 실행하는 4개 검사를 추가했습니다. 서버 번호가 뒤섞인 26개에서 정확히 2~26번을 선택하며, 읽음 경계·다른 방·본인 발신·미게시 항목 제외와 동률 순서를 검사합니다.
-- 첫 0.1.8 후보(`b7a4d328…`)는 요약에 `[26]`·2~26번을 담았지만 개별 알림은 `[25]`·1~25번에 머무는 별도 시점 문제를 재현했습니다. 수동으로 활성 알림을 한 번 갱신하면 `[26]`으로 맞아졌습니다. 최종 후보는 메시지 저장·게시 이벤트마다 방·계정별로 합쳐 400ms 뒤 아직 활성인 알림을 한 번 갱신합니다. 주기적 조회·서버 요청·DB 쓰기는 추가하지 않습니다.
-
-최종 0.1.8은 정책 86개·SQL 4개, 두 APKM 각각 정적 검사 954개, 읽음 단독 선택 검사 928개를 통과했습니다. 같은 서명으로 업데이트해 설치 APK 해시·기존 로그인·네 기능 켜짐을 확인했습니다.
-
-| 최종 0.1.8 자동 시험 | 결과 |
+| `0.1.8-dev` S10e test | Result |
 | --- | --- |
-| 26개 혼합 문자·5개씩 발송 | 백그라운드 수신 후 요약·개별 알림 모두 `[26]`. 수동 갱신 없이 실제 UI와 알림 메타데이터 일치 |
-| 최근 25개 정확성 | 요약·개별 모두 2~26번을 빠짐없이 시간순으로 유지. 긴 글과 명시적 줄바꿈도 실제 수신 확인 |
-| 무음·추천 답장 | 조용한 채널 유지, 시스템 제안 꺼짐·자동 생성 답장 허용 없음·RemoteInput 선택지 0개 |
-| 읽음·직접 답장 버튼 | 개별 알림에 immutable 읽음 1개·직접 입력 답장 1개. 요약에는 읽음 없음. 이번 시험에서 답장 전송은 하지 않음 |
-| 방 전체 읽음 | 실제 알림 버튼으로 26개를 읽음 처리한 뒤 해당 알림 제거. 기존 LINE 완료가 비동기이므로 제거가 반영될 때까지 관찰 |
-| 읽음 뒤 새 1개 | 로컬 미확인·최근 메시지·요약 숫자·개별 숫자가 모두 1. 새 시험의 1/1 본문만 보관하며 읽음 경계 이후 메시지임을 확인 |
-| 정리 | 임시 계측 앱 제거·디버그 로그 꺼짐·LINE 배경 상태. 마지막 봇 알림 1개는 확인용으로 읽지 않고 남김 |
+| 26 mixed messages in 5-message batches | Summary & individual notifications both showed `[26]` with exact messages #2–#26 in timestamp order (long wrapping & explicit newlines verified), silent channel, 0 smart-reply choices |
+| Whole-chat `Mark as read` → new message | Cleared 26 unread & removed notification; subsequent 1 message showed `[1]` with only the new body |
+| Swipe-dismiss preserves unread | Swiping notification away produced no read log; next message accumulated to `[2]` with both messages |
+| Process-dead (`am kill`) `Mark as read` | Killed background LINE process → tapped `읽음` on `[2]` → process started, native read completed, notification cleared, next message reset to `[1]` |
+| Multi-room coexistence & summary | Marking test room read kept other room's notification intact; multi-room summary stayed plain (`number=0`, no read action) |
+| `More Chat Info` OFF + `Mark as read` standalone | Native title/preview preserved without `[N]`; `읽음` and `답장` buttons worked cleanly |
+| LINE `Show message preview` OFF | Displayed `LINE / 새 메시지가 있습니다` (`number=0`, no message body or sender exposed) |
+| Normal + silent channel coexistence | Switching test room to normal delivered on `NewMessages` (`importance=4`) alongside silent rooms |
+| Complete hide & unhide restoration | Completely hidden room suppressed both individual and summary notifications; unhiding in settings restored quiet-channel delivery (`importance=2`) |
 
-최종 묶음 SHA-256: `9fcb3100f2e09933c8ac48226d7fb88ebf42cf8b13cbc15d786c9cf3ef39a168`. APK SHA-256: `ca4f596a3b446e5dcdad3beefc3e958a91538eb2e40ae8966422db80489ebe37`. 설치본과 휴대폰 `Download/LINE-notification-test` 복사본의 해시를 확인했습니다. 배포 검토 ZIP도 0.1.8로 갱신하며, 0.1.7 검토 ZIP은 수정 전 기록입니다.
+## Earlier version history (`0.1.7-dev` – `0.1.0`, S10e Android 12)
 
-최종 수신 화면을 먼저 확인하고 읽기 전용 계측으로 비교했습니다. 계측은 LINE 프로세스를 재시작하지만 수동 알림 갱신은 사용하지 않았습니다. 이전 후보의 마지막 26개를 초기화할 때에는 업데이트로 알림이 사라져 지정된 테스트 봇 대화만 한 번 열었으며, 다른 대화는 열거나 읽지 않았습니다. 토큰은 기존 마스킹 입력창에 둔 채 UI 발송 버튼만 사용했고 읽거나 파일에 저장하지 않았습니다.
+* **`0.1.7-dev`** (bundle `05c554e9…`, APK `6337d28c…`): Switched `More Chat Info` to Android `MessagingStyle` (25 retained, `[N]` total). Verified on S10e in real background group chat (`[32]` total, 25 retained, sender grouping, line wrapping, silent channel, `읽음`/`답장` actions) and synthetic S10e rendering (1:1 & group `[83]`).
+* **`0.1.6-dev`** (bundle `80a54a5a…`, APK `4e91d0fb…`): Added `Mark as read` via native chat-list updater (`qg3.e`). Verified group 3 unread → read & clear → new 1 → read & clear, process-dead read, live switch toggle (`읽음`/`답장` ↔ `알림 끄기`/`답장`), inline reply input dialog opening, and 914 / 888 static contracts.
+* **`0.1.5-dev`** (bundle `fe135199…`, APK `9a5cb5f3…`): Added post-save notification refresh (`uq8.z2.f`), verified 1 → 2 background updates on S10e (743 static contracts).
+* **`0.1.3-dev`** (bundle `befc670f…`, APK `91fe1d2e…`): Converted chat-menu Mute to local quiet mode keeping push delivery active; verified background silent delivery and complete hide/unhide on S10e (689 static contracts).
+* **`0.1.0` – `0.1.2`**: Initial settings screen, non-floating full-page dialog theme, and silent channel prototyping on S10e.
 
-이 결과는 S10e/API31의 공식 계정 1:1 방에 대한 시험입니다.
+## Remaining unverified scenarios
 
-### 0.1.8-dev 추가 실기기 매트릭스 검증 — 2026-11-20
-
-같은 S10e(Android 12/API 31, `0.1.8-dev` 설치본 유지)에서 공식 계정 테스트 봇 방만 대상으로 미검증 매트릭스 6개 시나리오를 추가 확인했습니다. 시험 후 모든 패치 스위치(4개 켜짐), LINE `메시지 내용 미리보기`(켜짐), 테스트 방 조용히 받기 상태, 디버그 로그(`INFO`)를 원상 복구했고 임시 자격 증명 파일은 즉시 삭제했습니다.
-
-| 추가 시험 항목 (0.1.8-dev) | 결과 |
-| --- | --- |
-| 스와이프 삭제(dismiss) 후 미읽음 유지 | 1개 수신 알림을 스와이프 삭제할 때 `LineNotifyPatch` 읽음 로그 없음. 후속 1개 발송 시 요약·개별 모두 `[2]`·최근 2개로 누적 확인 |
-| 프로세스 종료(`am kill`) 후 읽음·초기화 | 백그라운드 LINE 프로세스 종료(`am kill`, 강제 종료 아님) 뒤 남아 있던 `[2]` 알림에서 `읽음` 실행 → 새 프로세스 기동·`read: native updater submitted` → `read: native completion and room cleanup` 완료 및 알림 제거, 후속 1개가 `[1]`로 리셋 확인 |
-| 다른 방 알림 동시 유지·여러 방 요약 | 별도 일반 방 알림이 함께 활성인 상태에서 테스트 방만 `읽음` 처리 시 다른 방 알림 보존, 여러 방 요약은 일반 요약(`number=0`, 읽음 버튼 없음) 유지 확인 |
-| `More Chat Info` 꺼짐 + `Mark as read` 단독 | `More Chat Info`를 끈 상태에서 1개 수신 시 기본 제목(대괄호 숫자 없음)·기본 미리보기 유지, 하단에 `읽음`·`답장` 버튼 정상 표시 및 `읽음` 제거 확인 |
-| LINE `메시지 내용 미리보기` 끔 | `More Chat Info`가 켜진 상태에서 `메시지 내용 미리보기`를 끄고 1개 수신 시 `LINE / 새 메시지가 있습니다`(`number=0`, `messagingCount=null`)로 표시되어 본문·발신자 미노출 확인 |
-| 일반 알림 채널 + 무음 채널 동시 공존 | 테스트 방에서 `알림 켜기` 전환 후 2개 수신 시 기본 채널(`jp.naver.line.android.notification.NewMessages`, `importance=4`)로 `[2]`·`읽음`/`답장` 표시(무음 채널 방과 동시 유지), `읽음`으로 해당 방만 제거 확인 |
-| 완전 숨김 수신 차단 및 해제 복원 | 테스트 방을 조용히 받기 → `알림 완전히 숨기기` 지정 후 1개 발송 시 개별·요약 알림 모두 미노출 확인. 설정의 `완전히 숨긴 채팅방`에서 해제 시 `setting: quiet requested` → native setter 완료 후 후속 메시지가 무음 채널(`line_notification_patches.silent.v1`, `importance=2`, 누적 `[2]`)로 즉시 복구 확인 |
-
-아직 미검증으로 남은 범위: 일반 사용자 간 1:1·그룹의 0.1.8 회귀(직접 답장 실제 전송 포함), 다른 Android 버전·제조사, 실제 계정 변경, 오프라인 중 읽음·재연결, 잠금화면 비공개 표시.
-
-## 0.1.7-dev 대화형 알림
-
-사용자가 선택한 **대화형 목록 + `방 이름 [6]`** 표시를 적용했습니다. 카카오톡 APK에서 확인한 공개 Android `MessagingStyle`을 사용하며 고정 다섯 줄 대신 최근 미확인 메시지 최대 25개를 시스템에 전달합니다. 화면에 보이는 양은 시스템 높이·글꼴·본문 길이에 따라 달라지고, 제목의 숫자는 LINE의 전체 미확인 수입니다. [분석과 적용 범위](KAKAO_NOTIFICATION_REFERENCE.md)
-
-| 0.1.7 확인 항목 | 결과 |
-| --- | --- |
-| 정책 검사 | 86개 통과. 6·23·25·26개 및 100개 입력에서 최근 25개, 시간순·중복 제거·긴 본문·안정적인 발신자 ID 검사 |
-| 두 APKM 적용·연결 | 모든 기능을 선택한 두 APKM 각각 914개 정적 검사 통과 |
-| Mark as read 단독 | ARM64에 읽음 기능만 선택한 적용 검사 888개 통과 |
-| S10e 제품 렌더러 합성 검사 | 1:1 1개·그룹 7개·전체 83개 중 최근 25개. 전체 숫자와 보관 개수 분리, 긴 본문 줄바꿈·연속 발신자 묶음 확인 |
-| 합성 검사에서 기존 속성 보존 | 직접 답장 PendingIntent·계정 표식·기본 action 백업·공개 알림·공개 범위·채널 보존. 이전 사용자 지정 뷰와 스타일 제거 확인 |
-| 내용 숨김용 메타데이터 정리 | 대화 메시지·제목·Person 메타데이터 제거, 계정·action 백업 유지 확인 |
-| 동일 서명 업데이트 | 설치 성공·설치 APK 해시 일치·기존 로그인·네 스위치 켜짐 유지·새 설정 설명 확인 |
-| 실제 LINE 알림창 수신·확장 | 백그라운드 그룹 알림의 전체 미확인 32개·최근 25개·발신자별 묶음·자동 줄바꿈 확인. 첫 펼친 UI에 메시지 뷰 9개·발신자 구역 5개가 있어 이전 고정 다섯 줄을 넘음 |
-| 실제 개수·보관 한도·순서 | LINE 로컬 미확인 32개와 알림 숫자 `[32]` 일치. 최근 25개·안정적인 발신자 키·시간순·마지막 게시 ID 일치·읽음 경계 이후 메시지 확인 |
-| 실제 무음·하단 버튼 | 무음 채널 유지. 개별 알림에 immutable 읽음 1개·직접 답장 1개·기본 action 백업 2개, 요약에는 읽음 0개. 후속 `[2]` 알림 화면에서 본문 두 개와 읽음/답장 버튼 표시 확인 |
-
-합성 검사는 S10e(Android 12/API 31)의 독립 임시 앱에서 실제 제품 렌더러로 프레임워크 RemoteViews를 그린 결과입니다. 실제 알림 게시나 LINE 계정·네트워크를 사용하지 않았으며 SystemUI의 최종 배치와 실수신 시험을 대신하지 않습니다. 발신자·본문은 약 13.03sp, 그룹의 상단 방 이름은 약 10sp였습니다. 제목 배경 span은 시스템이 제거해 사용자 선택대로 대괄호로 구분합니다.
-
-0.1.7 APK SHA-256: `6337d28cef229aca2f571b68fd3c71a57e58af3c03ebb758c0b661144f3e76c9`. 묶음 SHA-256: `05c554e947578065fe365f0f6e82e37d025303f5920603a79a841df83e2c5b3d`.
-
-휴대폰 `Download/LINE-notification-test`에 APK와 묶음을 복사하고 두 파일의 SHA-256 일치를 확인했습니다. 임시 합성 진단 앱을 제거했습니다. 실제 화면을 먼저 확인한 뒤, 내용·이름·식별자를 출력하지 않는 읽기 전용 계측으로 알림의 개수와 action을 확인했습니다. 계측은 LINE 프로세스를 재시작하며 설정을 바꾸거나 읽음·답장을 실행하지 않았습니다. 대화방도 열지 않았습니다. 검증 후 계측 앱을 제거했고 디버그 로그는 꺼짐 상태로 유지했습니다. LINE은 배경에 두었습니다.
-
-첫 32개 알림에서 하단 action은 UI 계층에 있었지만 최초 스크린샷의 표시 영역에서는 가려졌습니다. 후속 2개 알림에서는 읽음/답장 버튼이 실제 화면에 표시됐습니다. 두 화면 사이 미확인 감소를 패치의 읽음 실행으로 해석하지 않습니다. 긴 방 이름은 접힌 화면에서 끝의 숫자까지 생략될 수 있으며 펼친 화면에서는 확인됐습니다.
-
-이 버전의 실제 1:1 수신·잠금화면 전체 시험은 미실행입니다. 수집한 최근 25개의 본문에는 명시적 줄바꿈이나 50자 초과 본문이 없었으므로 해당 사례는 합성 검사 결과만 있습니다. 실제 화면에서는 폭에 따른 자동 줄바꿈을 확인했습니다. 원시 화면 자료는 비공개 로컬 진단 폴더에 두고 배포용 기록에는 개수·성공 여부만 기록합니다.
-
-읽음·조용히 받기·저장 완료 갱신 경로는 유지했습니다. 아래 0.1.6 결과는 이전 버전의 실제 시험이며 0.1.7의 전체 회귀 시험으로 간주하지 않습니다.
-
-## 0.1.6-dev 진행 기록
-
-알림의 ‘읽음’은 방 전체를 LINE 기본 경로로 읽고 해당 방 알림을 정리합니다. 처리 중 도착하는 메시지의 포함 여부는 LINE에 맡기고, 완료 이후 도착한 메시지는 새 미확인 상태로 표시합니다. 아래 0.1.5 이하의 수신·설치 결과는 과거 버전 기록이며 0.1.6의 읽음 기능 검증을 대신하지 않습니다.
-
-| 0.1.6 확인 항목 | 기대 결과 | 결과 |
-| --- | --- | --- |
-| 정책 검사 | 방 단위 명령, 계정 구분, 준비 상태, 설정·미리보기 독립성 | 65개 통과 |
-| 두 APKM 적용·연결 검사 | 기본 읽음 객체·Rx 완료·방별 정리 연결 확인, 구조 불일치 시 중단 | 각 914개 정적 검사 통과 |
-| Mark as read만 선택 | More Chat Info·Not Too Much Silent 없이 저장 완료 후 버튼 갱신 | ARM64 적용 및 888개 정적 검사 통과. 실제 수신은 별도 시험 필요 |
-| 동일 서명 업데이트 | 로그인·대화·기존 기능 설정 보존, 읽음 스위치 최초 꺼짐 | 설치 및 설치 APK 해시 일치, 기존 로그인·세 스위치 켜짐 유지, 읽음 스위치 최초 꺼짐 확인 |
-| 일반·그룹 방, 미확인 1·5·23개 | 읽음 버튼 후 목록 숫자와 해당 방 알림 제거 | 사용자가 지정한 그룹의 미확인 3개와 1개에서 기본 읽음 완료·알림 제거·목록 숫자 제거 확인. 1:1 방·5개·23개는 미실행 |
-| 읽음 후 새 메시지 | 숫자 1부터 시작하고 이전 본문이 섞이지 않음 | 같은 그룹에서 숫자 1·본문 한 줄·읽음/답장 확인. 로컬 미확인 1·최근 메시지 1·게시 ID 일치·읽음 경계 이후 메시지 확인 |
-| 일반 알림·조용한 알림 | 두 경우 모두 같은 읽음 동작 | 조용한 그룹 알림에서 읽음 완료 확인. 일반 채널은 미실행 |
-| 다른 방 알림·직접 답장 | 다른 방 유지, 기존 직접 입력 답장 동작 | 실제 알림에서 직접 답장 입력창 열림 확인. 입력·전송은 하지 않음. 다른 LINE 방 알림 동시 시험은 미실행 |
-| 스위치 켜기·끄기 | 활성 알림의 읽음 / 답장 ↔ 알림 끄기 / 답장 전환, 방 설정 보존 | 실제 활성 알림에서 기본 mute 복원·읽음 재표시·답장 PendingIntent 동일·조용한 채널 유지 확인. 메모리 검사에서 Parcel 왕복과 반복 전환도 통과 |
-| 첫 푸시 저장 전·후, More Chat Info 끔 | 저장 전 버튼 보류, 저장 후 버튼 갱신 | INFO 켜짐 상태에서 저장 대기→완료 후 읽음 버튼 추가 로그 확인. INFO 끔 실수신은 미실행 |
-| 연속 탭·프로세스 재시작·계정 변경 | 방별 중복 실행 방지, 기존 계정 명령 거부 | LINE 프로세스가 없는 상태에서 남아 있는 알림의 읽음 실행·기본 완료·알림 제거 확인. 계정별 PendingIntent 구분은 기기 메모리 검사 통과. 연속 탭·실제 계정 변경은 미실행 |
-| 오프라인·처리 중 새 메시지 | LINE 기본 재시도·처리 범위 유지, 콜백을 서버 확인으로 표시하지 않음 | 실기기 대기 |
-| 펼치기·스와이프 삭제·요약 | 새 읽음 동작 없음, 요약에서 여러 방 읽기 없음 | 펼친 뒤에도 로컬 미확인 1개 유지 확인. 실제 요약에는 읽음 action 0개, 개별 알림에는 1개 확인. 스와이프 삭제·여러 방 요약은 미실행 |
-| 잠금화면·미리보기 숨김 | 본문을 추가로 노출하지 않고 버튼 준비 상태 확인 | 실기기 대기 |
-
-2026-11-16 S10e에 동일 키로 업데이트했습니다. APK SHA-256: `4e91d0fb2c214f7046215a1d69c0534c43ccdfae13e490526c4715c240d2794e`. 묶음 SHA-256: `80a54a5a4c0b4bc5cab7d5a11d8434255a4babefb5415aedf75b28b5fa2b1a26`. 설치된 APK 해시와 메인 화면 실행을 확인했습니다. 읽음 스위치는 최초 꺼짐을 확인한 뒤 실제 시험을 위해 켰습니다. 임의의 DB 쓰기, 별도 읽음 서버 API와 패치 자체 재시도는 추가하지 않습니다.
-
-2026-11-17 후속 시험까지 같은 APK를 사용했습니다. 실제 순서는 그룹 미확인 3개 → 읽음·알림 제거 → 새 첨부 메시지 1개 → 읽음·알림 제거입니다. 첨부 메시지의 문구는 이전 첨부와 같을 수 있으므로 본문 문자열 대신 로컬 개수·게시 ID 일치·읽음 경계 이후 여부로 확인했습니다. 별도 진단 과정에서 LINE 프로세스가 재시작됐으며, 마지막 읽음은 프로세스가 없음을 확인한 후 실제 알림 버튼으로 실행했습니다. 임시 진단 앱은 제거했고 디버그 태그도 원래의 꺼짐 상태로 복원했습니다. 읽음 스위치는 켜 둔 상태입니다.
-
-## 0.1.5 이하의 기록
-
-0.1.5는 첫 푸시가 로컬 저장보다 먼저 게시되는 경우 기본 미리보기를 유지하고, LINE의 메시지 저장 완료 후 표시 중인 알림을 로컬 데이터로 갱신합니다. 단일 방 요약도 방 이름·보낸 사람·본문을 표시하며, 복구된 요약에 남은 스타일 메타데이터를 제거합니다. 본문 크기는 기기의 기본 알림 제목 크기를 따르고 메시지 사이 2dp 간격은 유지합니다. 빌드·적용 검사와 업데이트 설치를 완료했습니다. 첫 메시지와 두 번째 메시지의 백그라운드 수신에서 발신자·본문·개수 1→2 갱신을 확인했습니다. 최종 글자 크기 보정본도 설치했으며 제목·본문 크기 일치를 기기에서 확인했습니다.
-
-| 0.1.5 확인 항목 | 기대 결과 | 결과 |
-| --- | --- | --- |
-| 빌드·두 APKM 정적 연결 검사 | 정책 검사 및 저장 완료 연결을 포함한 실제 APK 검사 통과 | 정책 59개, 두 APKM 각각 연결 검사 743개 통과 |
-| 데이터·설정을 보존한 업데이트 설치 | 같은 서명, 로그인·패치 설정 유지 | 동일 서명 업데이트 설치 성공·APK 해시 일치, 기존 메인 화면 실행 |
-| 미확인 메시지 정확히 1개 | 로컬 저장 전 기본 미리보기 유지, 저장 후 방 이름·보낸 사람·본문·개수 1 표시 | 통과: 앱을 열지 않고 접힌/펼친 화면에서 이름·발신자·본문·음영 숫자 1 확인. 저장 완료 후 갱신 기록 확인 |
-| 두 번째 메시지 수신 | 저장 완료 후 개수 2와 최신 본문으로 갱신 | 통과: 두 번째 백그라운드 수신 후 숫자 2, 최신 본문, 펼친 두 줄 확인. 로컬 개수 2와 일치 |
-| 본문 크기·간격·최대 5개 | 제목과 동일한 크기, 메시지 사이 2dp, 최대 5개 표시 | 통과: 기본 제목 명목 13sp, 초기 Line2 약 10sp. 최종 설치 코드의 기본/확장 레이아웃 렌더링에서 제목·본문 모두 약 13.03sp로 일치. 실제 두 줄 표시 확인; 5줄 실수신은 별도 미실행 |
-| 읽은 메시지·미리보기 끔·계정 변경 | 이전 본문을 새로 게시하지 않음 | 코드 조건 확인, 동시 변경 실기기 시험 대기 |
-| 알림 삭제와 저장 완료가 겹침 | 삭제된 알림을 갱신하지 않도록 게시 직전 재확인 | 활성 상태·게시 시각·메시지 식별자 재확인 구현. Android API가 원자적 갱신을 제공하지 않아 마지막 순간의 동시 삭제까지 보장하지 않음. 실기기 시험 대기 |
-
-최종 0.1.5 APK SHA-256: `9a5cb5f35cca9368b074420c396f79bf3ab60c8ae2fbd2efc136ff9c592d4184`. 묶음 SHA-256: `fe135199cfa896a8f8a65e0a6ba5c7a35e42d3bb05807da24f93029b6bb7b1d1`. 설치된 APK 및 휴대폰 Download/LINE-notification-test의 두 파일 해시 일치를 확인했습니다. 최종 글자 크기 검사는 설치된 코드로 메모리에서 레이아웃을 렌더링했으며 테스트 알림을 게시하지 않았습니다. 임시 진단 앱을 제거하고 고정 단계 디버그 로그도 원래 상태로 돌렸습니다.
-
-0.1.5의 1개·2개 실수신 시험은 글자 크기의 소수점 픽셀 반올림을 최종 보정하기 전 빌드에서 수행했습니다. 저장 완료 연결과 내용·개수 처리 코드는 최종 보정에서 변경하지 않았습니다.
-
-초기 0.1.5 설치 APK SHA-256: `5f46f17e2ce1da4e5053fc9df69bdbecb08dbeb27dd1395d99225fb7667b53b0`. 묶음 SHA-256: `d2e7e03a31fa36a9fa085b57688a6654e0ae124e66eb8335ea22023f090d2420`.
-
-2026-11-10 사용자는 미확인 메시지가 정확히 1개일 때 접힌 기본 알림에 실제 내용 대신 안내 문구가 표시된다고 보고했습니다. 0.1.4는 표준 알림 본문과 커스텀 미리보기에 같은 최신 메시지를 사용하고, 커스텀 본문을 16sp, 펼친 메시지 사이 간격을 2dp로 변경했습니다. 빌드·정적 검사와 업데이트 설치는 통과했지만 아래 실수신 시험에서 문제 해결에 실패했습니다.
-
-| 0.1.4 확인 항목 | 기대 결과 | 결과 |
-| --- | --- | --- |
-| 빌드·두 APKM 정적 연결 검사 | 정책 검사 및 실제 APK 적용·연결 검사 통과 | 정책 51개, 두 APKM 각각 정적 연결 검사 689개 통과 |
-| 기존 데이터·설정을 보존한 업데이트 설치 | 같은 서명으로 설치, 로그인·패치 설정 유지 | 설치 성공·APK 해시 일치, 기존 메인 화면 및 세 기능 켜짐 유지 확인 |
-| 미확인 메시지 정확히 1개 | 잠금 해제한 알림창에서 접힌 본문에 최신 메시지 표시, 커스텀 미리보기와 일치 | 실패: 개별 알림 없이 요약만 남아 접힌 화면에 ‘새 메시지가 있습니다’, 펼친 제목에 ‘LINE’ 표시. 보낸 사람을 알 수 없음 |
-| 두 번째 메시지 수신 | 전체 미확인 개수 2와 최신 본문 표시 | 실패: 표시된 숫자는 1. 로컬 진단에서는 미확인 2, 최근 메시지 2, 최신 메시지와 게시 ID 일치 확인 |
-| 커스텀 본문 크기·메시지 간격 | 기본·펼친 본문 16sp, 펼친 메시지 사이 2dp 간격, 최대 5개 표시 | 실제 APK의 XML 값 확인. 이후 사용자 요청에 따라 0.1.5에서 제목과 같은 크기로 변경 |
-
-0.1.4 설치 APK SHA-256: `70a0ef3ffc75289064de757bc50ce8d0beea9b82a846de73a0843fb5c920798d`. 묶음 SHA-256: `2fdab893b850d0dca46ae35746428ee0e7897533ce513486f8494c8d8f39a75f`. 휴대폰 Download/LINE-notification-test에도 두 파일을 복사하고 해시 일치를 확인했습니다.
-
-그룹을 접은 요약 본문의 글꼴과 배치는 Android가 정합니다. 잠금화면 내용 숨김과 LINE의 미리보기 설정은 유지합니다.
-
-2026-11-08 갤럭시 S10e(SM-G970N), Android 12/API 31에서 사용자 백업 확인·교체 허용 후 0.1.0 테스트 APK를 설치했습니다. 사용자가 로그인·복원을 완료했고, 기본 설정의 패치 메뉴 진입·세 기능 초기 꺼짐·읽음 기능 비활성을 확인했습니다. 2026-11-09 사용자는 알림 기능의 실제 작동을 확인했다고 알려주었지만, 이후 LINE에서 방의 알림을 끄면 알림이 표시되지 않는다고 구체적으로 보고했습니다. 앞선 전반적인 동작 확인을 무음 방 시험 통과로 취급하지 않습니다. 아래 표의 세부 시나리오 전체에 대한 개별 측정 기록은 없습니다.
-
-0.1.1은 사용자 피드백에 따라 전체 화면 설정 UI와 이름 옆 음영 숫자 표시를 반영한 업데이트입니다. 사용자가 테스트 알림 도착을 알려주었으며, 이는 숫자 음영의 실제 렌더링 검증과 구분합니다.
-
-0.1.2에서는 로컬 수신 메시지가 알림 등록 단계에 도달하기 전에 적용되는 일반 채팅방의 무음 조건을 추가로 연결했습니다. 설정 화면에는 비부동 창 테마 오버레이를 적용해 상태 표시줄 대비를 보완합니다. 업데이트 설치와 설정 화면의 상태 표시줄 대비는 실기기에서 확인했습니다. 수신된 로컬 메시지는 무음 채널로 게시되지만, 방의 기본 알림을 끈 상태의 백그라운드 수신 문제는 남았습니다. 사용자는 알림을 켠 방은 백그라운드에서도 바로 수신된다고 확인했습니다.
-
-| 0.1.2 확인 항목 | 결과 |
-| --- | --- |
-| 기존 데이터·설정을 보존한 업데이트 설치 | 통과: 설치 APK 해시 일치, 로그인·세 스위치 켜짐 유지 |
-| 설정 화면 상태 표시줄 가독성 | 통과: 흰 배경에 어두운 아이콘 표시 |
-| LINE에서 알림을 끈 일반 방의 무음 알림 | 로컬 수신 후 게시 확인. 백그라운드에서는 앱을 열어야 갱신됨: 미해결 |
-| 방 이름 옆 음영 숫자 및 펼친 메시지 | 개별 알림에서 음영 숫자 2, 펼친 미확인 메시지 2개 확인. 그룹을 접은 요약은 Android 기본 텍스트 |
-
-0.1.3은 사용자가 요청한 버튼 동작으로 변경한 버전입니다. Not Too Much Silent를 켜면 기존 채팅방 메뉴의 ‘알림 끄기’가 로컬 조용히 받기로 작동하고, ‘알림 완전히 숨기기’가 기존 기본 알림 끄기에 대응합니다. 정책 검사 51개와 두 APKM 각각의 정적 연결 검사 689개를 통과했습니다. 기존 수신 차단 상태의 테스트 방을 ‘알림 켜기 → 알림 끄기’로 전환한 뒤, 사용자가 LINE을 열지 않고 새 알림을 받은 것을 확인했습니다. Android 활동 기록상 알림 게시(23:20:45, 23:21:08)는 앱 재개(23:21:36)보다 앞섰고, 패치 기록에서도 기본 수신 허용 상태에서 무음 채널이 적용됐습니다. 이는 초기 0.1.3 APK(`6d5cc816…ef70a`)의 결과이며, 알림창 버튼 보완이 포함된 최종 묶음의 설치 결과는 아래와 별도로 기록합니다.
-
-| 0.1.3 확인 항목 | 기대 결과 | 결과 |
-| --- | --- | --- |
-| 데이터·설정을 보존한 업데이트 설치 | 기존 로그인·기능 설정 유지 | 최종 APK 설치·해시 일치, 로그인·조용히 받기 상태 유지 |
-| 기존 ‘알림 끄기’ 버튼 | 메뉴는 꺼진 상태로 표시하고 기본 푸시 수신은 유지 | 테스트 방에서 메뉴 상태 변경 및 백그라운드 수신 확인 |
-| 앱을 배경에 두고 새 메시지 수신 | 조용히 받기 방의 알림이 소리·진동·팝업 없이 갱신 | 사용자 수신 확인 + 앱 재개 전 무음 채널 게시 기록 확인. 전체 재부팅/종료 시나리오는 미실행 |
-| 기존 ‘알림 켜기’ 버튼 | 로컬 조용히 받기 해제, 일반 알림으로 복귀 | 버튼 상태 전환 확인 |
-| 완전 숨김 지정·해제 | 기본 알림 끄기·로컬 숨김 적용, 해제 시 이전 조용히 받기 또는 일반 알림 복원 | 최종 빌드에서 숨김 확인 창 및 native setter 성공 후, 해제·조용히 받기 복원 성공. 숨긴 상태의 새 메시지 수신 시험은 별도 미실행 |
-| 기존 기본 알림이 꺼진 방 전환 | ‘알림 켜기 → 알림 끄기’ 한 번으로 새 조용히 받기에 지정, 자동 일괄 변경 없음 | 테스트 방 전환 후 백그라운드 수신 확인 |
-| native 설정 변경 실패 | 성공으로 표시하지 않고 로컬 설정 복구 | 미실행 |
-
-| 시험 | 기대 결과 | 결과 |
-| --- | --- | --- |
-| APK 설치·첫 실행 | 설치 성공, 로그인 화면, 초기화 오류 없음 | 통과 |
-| 최초 실행, 세 스위치 꺼짐 | 기본 알림 동작, 패치 설정 진입 가능 | 설정 화면·초기 스위치 상태 확인 |
-| 일반 방 / LINE 무음 방 / 완전 숨김 방 동시 수신 | 기존 알림 / 소리·진동·팝업 없는 갱신 / 표시 없음 | 0.1.2에서 무음 방의 백그라운드 수신 실패 지속. 일반 방 즉시 수신은 사용자 확인 |
-| 숨긴 방에서 새 메시지 | 개별·요약 알림에 내용 노출 없음 | 미실행 |
-| 활성 알림이 있는 방을 숨김 지정 | 해당 알림 제거 | 미실행 |
-| 무음 기능 껐다 켬 | 로컬 조용히 받기 상태 보존·적용 중지/재개, 완전 숨김의 기본 알림 꺼짐 유지 | 미실행 |
-| 미확인 0·1·5·6·23개 | 제목의 전체 개수 일치, 최대 5개 시간순 표시 | 미실행 |
-| 다른 기기에서 읽음 | LINE 동기화 후 오래된 알림 갱신·취소 | 미실행 |
-| 갱신 중 추가 수신·읽음 | 다른 방·이미 읽은 본문 노출 없음 | 미실행 |
-| 사진·스티커·그룹 채팅 | 보낸 사람과 본문 또는 첨부 표시, 추가 다운로드 없음 | 미실행 |
-| 중복 수신 | 같은 메시지 ID 중복 표시 없음 | 미실행 |
-| No reply | 추천 답장 없음, 직접 입력 답장 정상 작동 | 미실행 |
-| 펼치기·스와이프 삭제 | 패치가 읽음 처리를 호출하지 않음 | 미실행 |
-| Mark as read (0.1.0~0.1.5) | 당시에는 지원 불가로 비활성, 새 읽음 동작 없음 | 당시 설정 비활성 확인. 0.1.6 검증은 위 표에 별도 기록 |
-| 권한 거부 / 원래 채널·그룹 차단 | 무음 채널로 우회 표시하지 않음 | 미실행 |
-| 잠금화면 비공개·완전 숨김 / LINE 미리보기 끔 | 기존 제한보다 많은 정보 노출 없음 | 미실행 |
-| OpenChat / 통화 / 진행 중 알림 | 기존 동작 유지 | 미실행 |
-| 재시작·프로세스 종료·재부팅·네트워크 재연결 | 기기가 수신한 메시지에서 설정 적용 | 미실행 |
-| FIS 복구 미포함 / 포함 | 등록·백그라운드 수신 결과 각각 기록 | 미실행 |
-| 계정 변경 | 이전 계정 숨김 목록을 새 계정에 적용하지 않음 | 미실행 |
-
-Android 설정의 **강제 종료**는 단순 프로세스 종료와 다릅니다. 강제 종료 후 앱을 다시 열기 전의 수신 중단과 일반 백그라운드 수신 실패를 구분합니다. OEM 배터리 제한과 무음 채널의 사용자 변경 여부도 기록합니다.
-
-문제가 있으면 해당 기능을 끄고 다시 비교합니다. 스크립트에 대화 로그 수집·자동 로그인·메시지 전송 기능은 없습니다. 문제 재현용 `LineNotifyPatch` 로그는 ADB로 명시적으로 활성화할 때만 출력하며, 고정된 단계 이름만 포함합니다. 계정·방 식별자, 대화 내용, 예외 메시지는 포함하지 않습니다.
-
-최종 0.1.3 설치 APK SHA-256: `91fe1d2eaaece2ae40ce37e5b4af47def65ba9dc987676eac20ec19d9922ff78`. 묶음 SHA-256: `befc670f560da57b5a8b2557f18c529df57f8e301a71149af7d2517b6ec7a94e`. 알림창 하단 알림 끄기 연결은 정적 검사 통과이며 실기기 클릭 시험은 별도로 기록하지 않았습니다.
+* Real-account live FCM push & read sync on Android 13–16 / non-Samsung OEMs (Android 16 testing above was diagnostic + unauthenticated boot)
+* Actual inline direct-reply message sending (input field opening verified; sending not executed)
+* Real multi-account switching on the same device
+* Native `ue3.k.p` failure rollback under live server error

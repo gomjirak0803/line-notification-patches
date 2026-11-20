@@ -1,104 +1,60 @@
-# 지원 입력과 구현 근거
+# Compatibility & Implementation Notes
 
-지원 선언: `jp.naver.line.android` / `26.16.0` / `261600106`, 실험 대상. Manager의 버전 검사를 우회해도 패치 내부에서 이 값을 다시 확인합니다.
+Declared target: `jp.naver.line.android` / `26.16.0` / `261600106` (experimental). Even if Morphe Manager's version check is bypassed, `verifiedLineVersionPatch` re-validates package name, version name, and version code internally.
 
-0.1.8의 최근 메시지 조회는 `created_time DESC, CAST(server_id AS INTEGER) DESC`로 최신 25개를 고릅니다. 묶음 수신에서 서버 ID가 생성 시각 순서와 다를 수 있음을 실제 공식 계정 시험에서 확인했습니다. 0.1.7의 ID 우선 LIMIT는 더 오래된 항목을 남길 수 있어 수정했습니다. 읽음 경계의 서버 ID 비교는 LINE 기존 상태를 따릅니다.
+Recent message lookup (`NativeLine.RECENT_MESSAGES_SQL`) selects the latest 25 unread messages ordered by `created_time DESC, CAST(server_id AS INTEGER) DESC`. Real Official Account batch tests (`0.1.8-dev`) showed that `server_id` order can differ from creation timestamp order within batched pushes; the read boundary comparison still follows LINE's native `server_id` boundary.
 
-저장·게시 이벤트가 Android의 비동기 알림 등록보다 먼저 끝나 개별 알림이 한 개 늦게 남는 경우도 재현했습니다. 0.1.8은 기존 즉시 변환/갱신에 더해, 방·계정별로 합친 이벤트가 끝난 뒤 400ms에 활성 알림을 한 번 더 확인합니다. 새 메시지나 알림을 생성하지 않고, 현재 계정·미리보기·읽음 경계·기존 게시 식별자를 다시 검사합니다. 주기적 폴링과 자동 재전송은 없습니다. 삭제와 갱신 사이 원자성의 기존 한계는 남습니다.
+Because Android notification posting is asynchronous, a save/post event can complete before the final child notification finishes registering. In addition to immediate transform/refresh, `Notifications.deferRefresh` coalesces bursts per `(account, chat)` and runs one trailing active-notification refresh after 400ms on a background worker thread (`REFRESH_WORKER`). It never polls, writes native DBs, creates absent notifications, or makes network requests.
 
-## 제공된 APKM
+## Inspected APKM inputs
 
-| 구분 | CPU | 화면 밀도 | 최소 Android |
+| Variant | ABIs | Densities | Min SDK |
 | --- | --- | --- | --- |
-| 1arch_2dpi (arm64) | arm64-v8a | 480·640dpi | API 30 (Android 11) |
-| 2arch_6dpi (universal 별칭) | arm64-v8a·armeabi-v7a | 120~480dpi의 6종류 | API 32 (Android 12L) |
+| `1arch_2dpi` (arm64) | `arm64-v8a` | `480`, `640` dpi | API 30 (Android 11) |
+| `2arch_6dpi` (universal alias) | `arm64-v8a`, `armeabi-v7a` | 6 densities (`120`–`480` dpi) | API 32 (Android 12L) |
 
-두 파일의 **DEX 14개는 모두 동일**하며 리소스·분할 구성이 다릅니다. `universal`은 작업용 별칭으로, 모든 CPU를 지원한다는 뜻이 아닙니다.
+All **14 DEX files are identical** between the two APKMs; only split resources and native libraries differ. (`universal` is a local working alias, not all-ABI support.)
 
-| 입력 | SHA-256 |
+| Input | SHA-256 |
 | --- | --- |
 | arm64 APKM | `e059b2a35a0c5bcacb9fd0fe1512d099fbc18c2fcab16e0b47788455eff03338` |
-| arm64 base.apk | `26331d398d421c0bc61d439c6df5fd9492519dd8940f342b5784df4676b96c42` |
+| arm64 `base.apk` | `26331d398d421c0bc61d439c6df5fd9492519dd8940f342b5784df4676b96c42` |
 | universal APKM | `4a82c3173a935c52dbe96b8768b73a2dda7284b860f37e4982d72b5672dbf1af` |
-| universal base.apk | `a2a39613d1899d967cd016725e12e14268b6fc6d79386eee8ff821d3a9a90d16` |
+| universal `base.apk` | `a2a39613d1899d967cd016725e12e14268b6fc6d79386eee8ff821d3a9a90d16` |
 
-두 원본 base.apk의 APK 서명 검증을 통과했습니다. 원래 인증서 SHA-256은 `e682fe0bcd60907dfed515e0b8a4de03aa1c281d111a07833986602b6098afd2`, 교체 키는 `e6e8036e01234e919fbe9cf9ea5d210435cfc0542328641aa70a018f52f63cf8`입니다. 원본 서명 확인 결과이며 수정 앱을 공식 서명으로 만들었다는 뜻이 아닙니다.
+Both original `base.apk` files passed APK signature verification: lineage-root certificate SHA-256 `e682fe0bcd60907dfed515e0b8a4de03aa1c281d111a07833986602b6098afd2`, rotated certificate SHA-256 `e6e8036e01234e919fbe9cf9ea5d210435cfc0542328641aa70a018f52f63cf8`.
 
-## 26.16.0 연결 지점
+## LINE `26.16.0` DEX bindings
 
-| 역할 | 분석한 위치 |
+| Role | Verified location |
 | --- | --- |
-| 초기화 | `LineApplication.onCreate` |
-| 설정 목록 | `AboutLine` / `MORETAB_SETTINGS_ABOUTLINE` 구조로 식별, Profile 아래 삽입 |
-| 패치 설정 화면 | LINE의 `Header`, `line_user_settings_switch_item_view`, `line_user_settings_text_item_view` 등 실제 설정 리소스 재사용 |
-| 무음 방 로컬 알림 조건 | `gw3.i.c`의 단일 `wk8.l0.x` 호출과 `ip8.c.d`의 일반 채팅방 `wk8.l0.x` 호출 |
-| 개별·요약 알림 전 숨김 | `dw3.f.b` |
-| 게시 직전 변환 | `androidx.core.app.k.a`의 framework `NotificationManager.notify` 호출 |
-| 로컬 저장 완료 후 활성 알림 갱신 | `uq8.z2.f`의 동기식 `rw8.h.a` 저장 완료·nonnull 결과 직후 `Notifications.onMessageStored(chat)` |
-| 계정 | `ap3.b.getProfile()` / `dp3.a.b` |
-| 방 이름·읽음 경계·전체 미확인 수 | `ue3.k.u1` → `ig3.k`의 `b`, `m`, `n.c` |
-| 미리보기 허용 | `nn8.i.c` |
-| 방별 알림 설정 | `nn8.c.a` → `pn8.c.c` |
-| 기존 채팅방 알림 버튼 | `z50.y0.invoke`에서 native 결과 콜백 생성 직후 `Settings.interceptToggle` 연결 |
-| 채팅방 메뉴의 알림 표시 상태 | UI용 Parcelable `z50.t2` 생성자의 `m`에 로컬 조용히 받기 상태 반영 |
-| 채팅 목록 길게 누르기 알림 버튼 | `d42.d.u3`의 일반 채팅방(`f22.j`) 분기에서 `Settings.interceptChatListToggle` 연결 (OpenChat `f22.z`·서비스챗 `f22.w` 제외) |
-| 채팅 목록 알림 표시 상태·갱신 | UI 모델 `f22.i` 생성자의 `f`에 `Settings.menuNotifiable` 반영, 전환 완료 시 `com.linecorp.rxeventbus.d.b(xe8.b.CHAT_LIST)`로 목록 갱신 |
-| 사용자 요청에 따른 기본 알림 설정 변경 | 기존 `ue3.k.p(chat, enabled, continuation)` 호출, `dt8.d` 기반 continuation으로 native 비동기 결과 처리 |
-| 완전 숨김 메뉴 | `ChatHistoryMenuFragment.onViewCreated`의 단일 `ji8.f.n(Collection)`, 기존 `d60.z` 메뉴 행 |
-| 읽음 버튼 서비스 진입 | 비공개 `LineAccessServiceForNotification.onStartCommand`에서 패치 전용 action 구분 |
-| 채팅 목록과 같은 읽음 객체 | `sc0.f.a(context, n30.d.a)` → `n30.d.b()` → `ue3.y0.a` → `qg3.e.e(chatId)` |
-| 읽음 완료 후 방 알림 정리 | `a78.b` 완료 콜백에서 `fw3.h.c(...)`, `fw3.l.a(chat)` 및 `fw3.l.c(chat)` 사용 |
-| 푸시 등록 | FIS 요청의 `X-Android-Cert` / `URLConnection.addRequestProperty` |
-| 펼친 알림 발신자 프로필 사진 | 1:1 원본 알림 `largeIcon`/`sender_person` 재사용 + 그룹 `contacts.picture_path` 및 LINE Glide 로컬 캐시 전용(`e80.l0`, `ao.a.s(true)`=`onlyRetrieveFromCache(true)`, `kn.l.b`, `ao.a.d()`) |
+| Initialization | `LineApplication.onCreate` |
+| Settings entry row | Identified via `AboutLine` / `MORETAB_SETTINGS_ABOUTLINE`, inserted below Profile |
+| Patch settings UI | Reuses LINE's `Header`, `line_user_settings_switch_item_view`, `line_user_settings_text_item_view`; uses `setDecorFitsSystemWindows(false)` + `OnApplyWindowInsetsListener` (`systemBars() \| displayCutout()`, `WindowInsets.CONSUMED`) for API 30–36 |
+| Silent-room notification gates | Single `wk8.l0.x` call in `gw3.i.c` and regular-chat `wk8.l0.x` call in `ip8.c.d` |
+| Pre-post child + summary suppression | `dw3.f.b` |
+| Notification publish transform | Framework `NotificationManager.notify` call inside `androidx.core.app.k.a` |
+| Post-save active notification refresh | Immediately after synchronous `rw8.h.a` non-null result in `uq8.z2.f` → `Notifications.onMessageStored(chat)` |
+| Active account | `ap3.b.getProfile()` → `dp3.a.b` |
+| Room name, read boundary, total unread | `ue3.k.u1` → `ig3.k` (`b`, `m`, `n.c`) |
+| Message preview setting | `nn8.i.c` |
+| Per-room notification flag | `nn8.c.a` → `pn8.c.c` |
+| Chat-menu Mute/Unmute toggle | `z50.y0.invoke` immediately after native callback creation → `Settings.interceptToggle` |
+| Chat-menu presentation state | UI Parcelable `z50.t2` constructor field `m` → `Settings.menuNotifiable` |
+| Chat-list long-press Mute/Unmute toggle | `d42.d.u3` regular-chat (`f22.j`) branch → `Settings.interceptChatListToggle` (OpenChat `f22.z` & ServiceChat `f22.w` untouched) |
+| Chat-list icon/label state & UI refresh | UI model `f22.i` constructor field `f` → `Settings.menuNotifiable`; live refresh via `com.linecorp.rxeventbus.d.b(xe8.b.CHAT_LIST)` |
+| Native room notification setter | `ue3.k.p(chat, enabled, continuation)` with `dt8.d`-based continuation bridge |
+| Complete-hide chat menu row | Single `ji8.f.n(Collection)` call in `ChatHistoryMenuFragment.onViewCreated`, native `d60.z` row |
+| Notification action service | Non-exported `LineAccessServiceForNotification.onStartCommand` (`MUTE_CURRENT_CHAT_ACTION` + private `MARK_CHAT_AS_READ` action) |
+| Native chat-list read updater | `sc0.f.a(context, n30.d.a)` → `n30.d.b()` → `ue3.y0.a` → `qg3.e.e(chatId)` |
+| Post-read room notification cleanup | `a78.b` completion callback → `fw3.h.c(...)` with `fw3.l.a(chat)` and `fw3.l.c(chat)` |
+| Push registration (optional) | FIS `X-Android-Cert` / `URLConnection.addRequestProperty` |
+| Expanded notification sender avatars | 1:1 reuses original `largeIcon`/`sender_person`; group reads `contacts.picture_path` + LINE Glide local cache only (`e80.l0`, `ao.a.s(true)`=`onlyRetrieveFromCache(true)`, `kn.l.b`, `ao.a.d()`) |
 
-추가 코드는 대화 DB에 직접 쓰거나 메시지 서버를 조회하지 않습니다. 0.1.6의 읽음 버튼을 누르면 검증한 LINE 기본 읽음 객체를 호출합니다. 0.1.3에서는 사용자가 방 알림 설정을 변경할 때 기존 native 설정 경로를 호출하며, 그 경로의 정상적인 로컬·서버 설정 변경을 사용합니다. 별도 서버 API나 주기적인 메시지 수집을 추가하지 않습니다. 로컬 메시지를 조회한 전후로 LINE의 미확인 개수·읽음 경계가 달라지면 새 미리보기를 게시하지 않습니다. 취소된 메시지와 동기화의 세부 타이밍은 실기기 검증이 필요합니다.
+## Architecture highlights
 
-0.1.2에서는 `ip8.c.d`가 로컬 수신 메시지를 알림 등록 단계로 넘기기 전에 검사하는 일반 채팅방의 무음 조건을 추가로 연결했습니다. 같은 메서드의 OpenChat 스레드 상위 방 조건, 현재 열린 채팅방 제외, 전체 알림 설정과 `PREVENT_NOTIFICATION` 조건은 유지합니다. 기기가 받은 메시지의 무음 게시는 확인했으나, 기본 알림을 끈 방의 백그라운드 수신 실패는 남았습니다. 알림을 켠 방의 백그라운드 즉시 수신은 사용자가 확인했습니다.
-
-0.1.3은 이 차이를 반영해 기존 채팅방 메뉴의 버튼 동작을 변경합니다. Not Too Much Silent가 켜진 상태에서 ‘알림 끄기’는 로컬 조용히 받기를 저장하고 native 푸시 수신은 켜 둡니다. ‘알림 켜기’는 조용히 받기를 해제합니다. `z50.t2.m` 변경은 메뉴 표시용 상태에 한정하며, 실제 기본 알림 상태를 꺼진 값으로 덮어쓰지 않습니다. 별도의 조용히 받기 메뉴는 추가하지 않습니다.
-
-‘알림 완전히 숨기기’는 기존 native 설정 경로로 기본 알림을 끄고 로컬 숨김 상태도 저장합니다. 해제하면 기본 수신을 켜고 이전의 조용히 받기 또는 일반 알림으로 돌아갑니다. Not Too Much Silent를 끄면 로컬 조용히 받기는 적용하지 않으며, 완전 숨김으로 꺼 둔 기본 알림은 해제하기 전까지 꺼져 있습니다. 이미 기본 알림이 꺼진 방을 자동으로 일괄 변경하지 않으므로, 새 방식으로 전환하려면 해당 방의 ‘알림 켜기 → 알림 끄기’를 한 번 실행해야 합니다.
-
-0.1.1~0.1.6의 More Chat Info는 `DecoratedCustomViewStyle`에 음영 숫자와 최대 다섯 개의 한 줄 메시지를 표시했습니다. 0.1.7은 `MessagingStyle`로 교체하고, 최근 미확인 메시지 25개와 발신자 ID를 전달합니다. 전체 개수는 `방 이름 [6]`으로 구분하며 실제 줄바꿈·묶음·노출량은 시스템이 결정합니다. 카카오톡 APK에서 확인한 구현 방식과 S10e 합성 검사 결과는 [참고 분석](KAKAO_NOTIFICATION_REFERENCE.md)에 기록했습니다. 미사용 커스텀 레이아웃 리소스 주입 패치(`NotificationBadgeResources.kt`)는 정리하여 제거했습니다.
-
-0.1.4는 내용 표시 허용·계정·읽음 상태를 확인한 최신 메시지를 `Notification.Builder.setContentText`와 커스텀 미리보기에 함께 사용했으나 실수신 문제는 남았습니다. 첫 메시지는 개별 알림이 사라지고 보낸 사람 없는 일반 요약만 표시됐으며, 두 번째 메시지는 실제 미확인 2개보다 한 개 적은 숫자가 표시됐습니다. 로컬 진단의 미확인 2·최근 메시지 2·최신 ID 일치를 통해 저장 완료 후 데이터와 게시된 알림이 어긋난 것을 확인했습니다.
-
-0.1.5는 게시된 메시지 ID와 LINE의 읽음 경계를 비교합니다. 이미 읽은 메시지는 표시하지 않고, 로컬 저장이 아직 따라오지 않았으면 이전 개수로 덮어쓰는 대신 기본 미리보기를 유지합니다. `uq8.z2.f`의 동기식 저장이 끝나면 같은 계정·방의 활성 알림만 로컬 데이터로 갱신합니다. 새 메시지 수집·주기적 조회·별도 서버 요청은 추가하지 않습니다. 갱신 전후 계정과 미리보기 허용 여부를 확인하고, 로컬 미확인 개수·읽음 경계가 조회 중 바뀌면 게시를 취소합니다.
-
-단일 방 요약에는 준비된 로컬 데이터로 방 이름·보낸 사람·본문을 적용합니다. 다른 방의 개별 알림이 함께 있는 요약은 일반 요약을 유지합니다. `recoverBuilder`가 남길 수 있는 `EXTRA_TEMPLATE`, `EXTRA_BIG_TEXT` 등은 완성된 요약의 extras에서도 지워 이전 스타일과 본문이 재사용되지 않게 합니다. 공개 버전에는 사용자 정의 본문을 넣지 않습니다.
-
-활성 알림 갱신 직전에는 알림 키·게시 시각·메시지 식별자를 다시 확인합니다. 이미 삭제되거나 교체된 알림은 갱신하지 않지만, Android에 원자적인 ‘활성이면 갱신’ API가 없어 재확인 직후의 동시 삭제까지 보장하지는 않습니다. 자동 재게시나 주기적 재시도는 없습니다.
-
-0.1.5~0.1.6은 본문에 기본 제목의 크기를 적용하고 메시지 사이 2dp를 사용했습니다. 0.1.7은 시스템 대화형 알림의 글꼴·행간을 사용합니다. S10e 합성 검사에서 발신자·본문은 약 13.03sp, 그룹의 상단 방 이름은 약 10sp로 표시됐습니다. 숫자 음영 span은 시스템에서 제거되어 사용자 선택에 따라 대괄호 표기로 바꿨습니다.
-
-설정 화면은 LINE의 테마·실제 행 리소스를 재사용합니다. 0.1.2의 비부동 창 테마 오버레이로 흰 배경에 어두운 상태 표시줄 아이콘이 표시되는 것을 갤럭시 S10e에서 확인했습니다. 같은 기기의 개별 알림에서 음영 숫자 2와 펼친 미확인 메시지 2개도 확인했습니다. 그룹을 접은 요약은 Android의 기본 텍스트 배치를 사용합니다.
-
-`LineNotifyPatch` 디버그 로그는 기본적으로 꺼져 있습니다. ADB로 해당 태그를 명시적으로 활성화한 재현에서만 고정된 처리 단계 이름을 출력하며, 계정·채팅방 식별자, 메시지 내용이나 예외 메시지는 출력하지 않습니다.
-
-## 0.1.6 읽음 버튼
-
-이전의 ‘알림에 담긴 메시지까지만 읽기’ 제약은 사용자 요청에 따라 폐기했습니다. **버튼을 누르면 방 전체를 읽는 것**이 현재 동작입니다. [LINE 공식 도움말](https://help.line.me/line/smartphone?contentId=20021705&lang=en)에 안내된 채팅 목록의 읽음 메뉴와 같은 객체를 사용합니다. 분석한 메뉴 경로는 `h32.g.c` → `h32.i` → `d42.d.K6` → `d42.i`입니다.
-
-실행 시 `sc0.f.a(context, n30.d.a)`에서 제공받은 `n30.d.b().a`의 `qg3.e`를 재사용하고 `e(chatId)`를 호출합니다. 이 객체가 현재 메시지를 선택하고 `ue3.k.e0(chat)` 등 기본 로컬 갱신과 읽음 전송을 수행합니다. 성공 완료 콜백에서는 메뉴와 동일한 `fw3.h.c(...)`로 해당 방의 알림을 정리합니다. 채팅 화면이나 메뉴를 열지 않으며, 다른 방 알림을 일괄 삭제하지 않습니다.
-
-읽음 요청·로컬 갱신·오프라인 재시도는 LINE이 처리합니다. 네트워크 실패가 기본 경로에서 재시도 대상으로 남아도 완료 콜백이 올 수 있으므로 **콜백을 서버 수신 확인으로 해석하지 않습니다.** 처리 중 새 메시지가 들어오는 경우에도 기본 읽음 경로의 포함 범위를 따릅니다. 처리 후 새로 받은 미확인 개수와 본문은 새로운 로컬 상태를 사용합니다.
-
-기존 비공개 서비스에 패치 전용 action을 연결하며 계정·채팅방별 immutable PendingIntent를 사용합니다. 실행 직전과 완료 후 계정을 다시 확인하고 같은 방의 동시 실행을 막습니다. 확인 실패나 연결 실패에서는 패치가 알림부터 제거하지 않습니다. 직접 답장의 PendingIntent와 RemoteInput은 유지합니다.
-
-첫 푸시의 메시지가 로컬 저장에 반영되기 전에는 읽음 버튼을 표시하지 않습니다. 저장 완료 연결은 공통 의존성에 두어 **More Chat Info를 끄거나 포함하지 않아도** 버튼을 갱신합니다. 내용 표시가 꺼져 있어도 읽음 준비 상태 확인에 메시지 본문을 요구하지 않습니다. 일반 채팅방의 개별 알림에만 적용하며, 여러 방 요약·OpenChat·통화·진행 중 알림은 제외합니다.
-
-Morphe의 `Mark as read` 선택 패치와 앱 설정 스위치를 모두 켜야 작동하며 최초 값은 꺼짐입니다. 스위치 설명은 ‘채팅방 전체를 읽음 처리하고 알림을 지웁니다.’입니다. 스위치를 바꾸면 활성 알림 버튼을 갱신하고, 끄면 기존 알림 끄기 / 답장으로 복원합니다. 알림 펼치기나 삭제에는 읽음 처리를 연결하지 않습니다.
-
-## 검증 범위
-
-`scripts/build.py`의 순수 Java 정책 테스트와 `scripts/validate.py`의 실제 APKM 적용·정적 연결 검사를 제공합니다. 결과는 `artifacts/validation-summary.json`에 묶음 해시와 함께 기록합니다. 이 검사는 Android 실행이나 푸시 수신 시험이 아닙니다. 설치·설정 화면 관찰, 사용자 보고 및 아직 실행하지 않은 시나리오는 [실기기 시험표](DEVICE_TESTS.md)에 구분해 기록합니다.
-
-0.1.6은 방 단위 읽음 명령·계정 구분·저장 완료 준비 상태·More Chat Info 및 내용 표시와의 독립성을 포함한 정책 검사 65개를 통과했습니다. 두 APKM 전체 적용 결과는 각각 914개, ARM64 읽음 기능 단독 선택 결과는 888개 정적 연결 검사를 통과했습니다. S10e에 같은 서명으로 업데이트했고, 조용한 그룹 알림에서 미확인 3개 읽음·알림과 목록 숫자 제거·다음 메시지 1개부터 재표시·프로세스 종료 후 읽음 실행을 확인했습니다. 실제 활성 알림의 기능 끄기/켜기와 직접 답장 입력창도 확인했습니다. Android 메모리 검사 8개에서 버튼 저장·복원·계정 구분·기본 객체 접근을 확인했습니다. 1:1 방·5개·23개·오프라인 등 시험표의 일부 사례는 미검증입니다. 묶음은 `patches/build/libs/line-notification-patches-0.1.6-dev.mpp`입니다.
-
-0.1.5는 정책 검사 59개와 두 APKM 각각 연결 검사 743개를 통과했고, 동일 서명으로 업데이트 설치한 뒤 APK 해시 일치와 메인 화면 실행을 확인했습니다. 첫 메시지와 두 번째 메시지의 백그라운드 수신에서 발신자·본문·개수 1→2 갱신을 확인했습니다. 최종 글자 크기 보정본도 설치했으며 제목·본문 크기 일치를 기기에서 확인했습니다. 묶음 경로는 `patches/build/libs/line-notification-patches-0.1.5-dev.mpp`입니다.
-
-0.1.4는 정책 검사 51개와 두 APKM 각각의 정적 연결 검사 689개를 통과했습니다. 같은 서명으로 업데이트 설치한 뒤 설치 APK 해시·로그인 유지·세 기능 켜짐을 확인했으나, 실제 첫 메시지의 일반 요약과 두 번째 메시지의 개수 지연 문제는 해결되지 않았습니다.
-
-이전 0.1.3 빌드는 정책 검사 51개와 APKM별 정적 연결 검사 689개를 통과했습니다. 기존 무음 방을 새 방식으로 전환한 후 백그라운드 수신을 확인했고, 최종 APK의 업데이트 설치·완전 숨김/복원도 확인했습니다. 세부 범위와 시험한 빌드 해시는 실기기 기록에 구분했습니다.
-
-알림창의 `MUTE_CURRENT_CHAT_ACTION`은 `LineAccessServiceForNotification.onStartCommand`에서 구분해 조용히 받기로 연결합니다. 0.1.9-dev부터는 채팅 목록 길게 누르기의 일반 채팅방 알림 토글(`d42.d.u3`의 `f22.j` 분기)과 목록 표시 상태(`f22.i.f`)도 같은 로컬 조용히 받기 경로에 연결하며, OpenChat(`f22.z`)·서비스챗(`f22.w`)과 검색 결과의 별도 알림 토글은 LINE 기본 동작을 유지합니다. 패치 전용 읽음 action은 검증한 기본 읽음 객체로 연결하고, 직접 답장과 그 밖의 LINE action은 원래 본문으로 진입합니다.
+* **No direct DB writes or custom server APIs**: Local SQLite reads (`naver_line`, `contact`) use `OPEN_READONLY`. User-triggered `Mark as read` and room notification toggles delegate to LINE's native objects (`qg3.e`, `ue3.k.p`), inheriting LINE's normal sync and offline retry handling.
+* **Not Too Much Silent (`0.1.3+`, chat list in `0.1.9+`)**: Intercepts regular-chat mute/unmute buttons in the chat menu, chat-list long-press menu, and notification shade to store local quiet state while keeping native push subscriptions active. `z50.t2.m` and `f22.i.f` affect UI presentation only. **알림 완전히 숨기기** calls LINE's native mute setter and suppresses locally; unhiding restores previous quiet or normal state. Existing natively muted rooms are not bulk-migrated.
+* **More Chat Info (`0.1.7+`, avatars in `0.1.11+`)**: Uses public Android `Notification.MessagingStyle` with up to 25 recent unread messages and `Room Name  [N]` total unread count. Unused legacy custom-view resources (`NotificationBadgeResources.kt`) were removed in `0.1.10-dev`. Preview lookup exceptions are isolated so transient SQLite errors fall back to the native (silent/normal + action-updated) notification rather than dropping non-hidden messages.
+* **Mark as read (`0.1.6+`)**: Marks the entire regular chat read using the exact same cached updater (`qg3.e`) as LINE's chat-list "Mark as read" menu ([LINE Help](https://help.line.me/line/smartphone?contentId=20021705&lang=en)), holds the button until local save completes, works independently of `More Chat Info` and message preview settings, and never attaches to multi-room summaries, OpenChat, call, or ongoing notifications. Completion callbacks represent local completion, not server acknowledgment.
+* **Debug logging**: `LineNotifyPatch` logs are disabled unless explicitly enabled via ADB (`setprop log.tag.LineNotifyPatch DEBUG`) and record only fixed stage strings—never account IDs, chat IDs, message content, or exception text.

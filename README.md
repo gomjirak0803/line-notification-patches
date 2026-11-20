@@ -1,79 +1,49 @@
 # LINE notification patches
 
-Morphe 소스: https://github.com/gomjirak0803/line-notification-patches
+**English**: README.md | **한국어**: [README.ko.md](README.ko.md)
 
-[0.1.9-dev 다운로드](https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.9-dev) · [배포 검증 결과](docs/PUBLICATION_STATUS.md)
+* **Morphe remote source**: https://github.com/gomjirak0803/line-notification-patches
+* **Latest release**: [v0.1.11-dev](https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.11-dev) · [Publication status](docs/PUBLICATION_STATUS.md) · [Device test matrix](docs/DEVICE_TESTS.md)
+* **One-click add**: [Add source to Morphe Manager](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) *(enable **Pre-release patches** and **Experimental app versions**)*
 
-[Manager에 소스 추가](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) · 사전 릴리스와 실험 앱 버전 설정을 켜세요.
+Independent experimental notification-control patches for **LINE `26.16.0`** (`jp.naver.line.android`, `versionCode 261600106`, `minSdk 30`), built for **Morphe Patcher 2.3.0**. This project is not authored by or affiliated with LINE, LY Corporation, or Morphe.
 
-릴리스는 Actions → Release → Run workflow로 만듭니다. 기존 npm semantic-release 설정은 이 Windows standalone 릴리스 경로에서는 사용하지 않습니다.
+## Patches
 
-0.1.9-dev는 `Not Too Much Silent` 켜짐 상태에서 **채팅 목록 길게 누르기 메뉴의 알림 끄기/켜기**와 **목록 음소거 아이콘·메뉴 라벨**에도 로컬 조용히 받기를 적용하며, Android Morphe Manager 원격 메타데이터(`created_at`) 파싱 호환성을 수정합니다. 정책 86개·Python 테스트 15개(SQL 4·발송 도구 8·메타데이터 3), 두 APKM 각각 정적 검사 1,007개와 읽음 단독 검사 967개를 통과했습니다. S10e에서 목록 길게 누르기 왕복 전환·무음/일반 채널 백그라운드 수신·오프라인 읽음 후 재연결 `[1]` 초기화를 확인했습니다. [시험 범위](docs/DEVICE_TESTS.md)
+All patches target `jp.naver.line.android` `26.16.0` (`261600106`) APKM. Including a patch in the APK is separate from enabling it: **every feature switch starts disabled inside LINE.** OpenChat, ServiceChat, call, and ongoing/foreground notifications are left untouched.
 
-0.1.8-dev는 자동 봇 시험에서 발견한 **최근 메시지 선택 오류와 개별 알림의 숫자 지연**을 수정합니다. 생성 시각으로 최근 25개를 고르고 저장·게시 뒤 활성 알림을 한 번 갱신합니다. 정책 86개·SQL 회귀 4개, 두 APKM 각각 정적 검사 954개와 읽음 단독 검사 928개를 통과했습니다. S10e에 같은 서명으로 업데이트해 **전체 26개·최근 2~26번 → 읽음·알림 제거 → 새 1개**를 실제 자동 발송으로 확인했습니다. 무음·읽음/답장 버튼·추천 답장 제거도 유지됩니다. [시험 범위](docs/DEVICE_TESTS.md)
+| Patch | Default | Behavior and scope |
+| --- | --- | --- |
+| **Notification settings** | `true` | Adds an **알림 패치 설정** (Notification Patch Settings) row below Profile in LINE's main Settings using LINE's own header, typography, and switch drawables. Supports Android 11–16 (`targetSdk 36` edge-to-edge window insets). |
+| **Not Too Much Silent** | `false` | Converts LINE's existing **Mute / Unmute** toggle in the chat menu, **chat-list long-press menu**, and notification shade into a local silent mode: server push delivery stays enabled while this device posts on a silent `IMPORTANCE_LOW` channel (`line_notification_patches.silent.v1`). Updates the chat-list muted bell icon and menu label locally without mutating LINE's stored model. Adds **알림 완전히 숨기기** (Hide completely) in the chat menu to invoke LINE's native mute + local suppression. Never bypasses OS-blocked notification channels. |
+| **More Chat Info** | `false` | Renders up to 25 recent local unread messages in chronological order using Android's public `Notification.MessagingStyle`, with LINE's native total unread count shown as `Room Name  [N]`. Displays sender profile avatars in expanded notifications by reusing LINE's original notification icon (1:1) and reading LINE's local Glide cache only (`onlyRetrieveFromCache(true)`) for multi-sender group chats. |
+| **No reply** | `false` | Disables system-generated contextual actions, generated replies, and smart-reply choices while keeping LINE's manual inline reply button and original `PendingIntent`. |
+| **Mark as read** | `false` | Replaces the notification mute button on individual regular-chat notifications with **읽음 (Mark as read)** using LINE's native chat-list read updater (`qg3.e`) and room notification cleanup (`fw3.h`). Marks the entire chat as read, holds the button until local storage catches up, and works independently of `More Chat Info`. Never added to multi-room summary notifications. |
+| **Restore push registration** | `false` | **Optional separate patch** for re-signed builds where Firebase Installations (`firebaseinstallations.googleapis.com`) rejects the re-signed certificate (`FisError: BAD CONFIG`). Replaces only the `X-Android-Cert` header value on the FIS request builder with LINE's original lineage-root SHA-1; does not modify Remote Config, LINE auth/messaging protocols, or Play Integrity, and does not require microG. |
 
-LINE 26.16.0용 **실험 단계 Morphe 패치**입니다. 0.1.7-dev는 카카오톡 APK에서 확인한 Android 대화형 알림 방식을 참고해 More Chat Info를 변경합니다. 긴 본문은 줄바꿈하고 연속 발신자의 메시지는 시스템이 묶어 표시합니다. 최근 미확인 메시지 최대 25개를 전달하며 실제 노출량은 기기에 따라 달라집니다. 전체 미확인 수는 `방 이름 [6]` 형태로 구분합니다. [참고 분석](docs/KAKAO_NOTIFICATION_REFERENCE.md)
+> Disabling **Not Too Much Silent** stops applying local quiet state and falls back to LINE's native settings. Rooms explicitly marked **Hide completely** also have LINE's native notifications turned off and remain off until unhidden.
 
-0.1.7은 정책 검사 86개, 두 APKM 각각 정적 검사 914개, 읽음 단독 선택 검사 888개를 통과했습니다. S10e에 같은 서명으로 업데이트해 기존 로그인·네 스위치를 유지했습니다. **실제 백그라운드 그룹 알림에서 전체 미확인 32개와 최근 25개, 발신자별 묶음·본문 줄바꿈·무음 채널을 확인했습니다.** 후속 화면에서는 `[2]`·본문 두 개·읽음/답장 버튼이 표시됐습니다. 합성 1:1·그룹 검사에서 긴 본문·명시적 줄바꿈과 기존 속성 보존도 확인했습니다. [세부 결과와 미검증 항목](docs/DEVICE_TESTS.md)
+## Recent releases
 
-읽음 버튼은 0.1.6에서 연결한 LINE 채팅 목록의 기본 객체를 사용합니다. 해당 방 전체를 읽음 처리하고 그 방 알림을 정리하며, 처리 중 도착한 메시지의 포함 여부는 LINE의 기본 동작을 따릅니다.
+* **`v0.1.11-dev`**: Shows sender profile avatars inside expanded `More Chat Info` (`MessagingStyle`) notifications using original icons (1:1) and LINE's local Glide cache only (`onlyRetrieveFromCache(true)`) for group chats; moves trailing 400ms refresh to a background worker. Verified on S10e Android 12 + 1,075 static APK contracts (ARM64 & Universal).
+* **`v0.1.10-dev`**: Fixes Android 15/16 (`targetSdk=36`) edge-to-edge header overlap on `SettingsPage`, isolates `More Chat Info` DB read exceptions so legitimate notifications are never dropped, removes unused `NotificationBadgeResources.kt`, and adds `extras` null guards. Verified on Android 16 AOSP emulator, Galaxy S22 Ultra (Android 16 / One UI 8.0 diagnostic), and S10e (Android 12 / One UI 4.1).
+* **`v0.1.9-dev`**: Extends `Not Too Much Silent` to the chat-list long-press mute/unmute menu and chat-list muted bell icon/label; fixes `patches-bundle.json` `created_at` formatting for Morphe Manager `2.6.0` remote updates; verified offline `Mark as read` + Wi-Fi reconnect on S10e.
+* **`v0.1.8-dev` – `v0.1.0`**: Initial notification suite, `MessagingStyle` rewrite, timestamp-ordered SQL selection for batched pushes, trailing save-completion refresh, and native chat-list `Mark as read`. See [Device test matrix](docs/DEVICE_TESTS.md) for per-version verification details.
 
-0.1.6의 정책 검사 65개, 두 APKM 각각 연결 검사 914개, 읽음 기능 단독 선택 검사 888개를 통과했습니다. S10e에 같은 서명으로 업데이트해 기존 로그인·설정을 유지했습니다. 조용한 그룹 알림에서 **미확인 3개 읽음 → 알림·목록 숫자 제거 → 새 메시지 1개 → 다시 읽음**을 확인했습니다. 앱 프로세스가 종료된 상태의 읽음, 활성 알림 버튼 전환, 직접 답장 입력창도 확인했습니다. 1:1 방·5개·23개·오프라인 등 [전체 시험표](docs/DEVICE_TESTS.md)의 일부 사례는 미검증입니다.
+## Usage in Morphe Manager
 
-0.1.5는 첫 푸시가 로컬 저장보다 먼저 도착하면 기본 미리보기를 유지하고 저장 완료 후 활성 알림을 갱신합니다. 정책 검사 59개, 두 APKM 각각 연결 검사 743개를 통과했고 같은 서명으로 설치했습니다. 실제 백그라운드 수신에서 발신자·본문·개수 1→2 갱신을 확인했습니다. 최종 보정본의 제목·본문 크기도 기기에서 일치했습니다. 본문은 기본 알림 제목 크기를 따르며 메시지 사이 간격은 2dp입니다.
+1. Use Morphe Manager supporting **Patcher 2.3.0** (verified on Morphe Manager `2.6.0`).
+2. Open [Add source to Morphe Manager](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) or go to **Sources → + → Remote** and enter `https://github.com/gomjirak0803/line-notification-patches`. See [official Morphe patch sources guide](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patch-sources.md).
+3. On the source card, enable **Pre-release patches** and **Experimental app versions**.
+4. Enable **Expert mode**, supply your own official **LINE `26.16.0` (`261600106`) full APKM bundle** (do not use a standalone extracted `base.apk`), and select the desired patches. Include **Restore push registration** if background push registration fails on a re-signed install. See [official Expert mode guide](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patching-expert-mode.md).
+5. Install the patched APK. Because the signature differs from official LINE, an in-place overwrite over official LINE will fail. **Back up your chats and verify account recovery methods before uninstalling official LINE.**
+6. Open LINE → **Settings → 알림 패치 설정** (below Profile) and enable the switches you want.
+   * Rooms already muted natively on an older version or another device are not bulk-migrated. Run **Unmute → Mute** once on that room to move it to local quiet mode.
+   * The silent channel is created without sound, vibration, or heads-up; any subsequent user changes in Android notification settings are respected by the OS.
 
-0.1.3에서 **기존 채팅방 메뉴의 ‘알림 끄기’를 조용히 받기로 바꾸고 푸시 수신은 유지**하도록 변경했습니다. 해당 버전은 두 APKM의 빌드·정적 연결 검사, 테스트 방의 백그라운드 조용한 알림 수신, 최종 수정본 설치와 완전 숨김 지정·해제를 확인했습니다. 버전별 결과는 [실기기 시험표](docs/DEVICE_TESTS.md)에 기록합니다.
+## Building from source (Windows x64)
 
-## 구현 범위
-
-| 기능 | 현재 동작 / 제한 |
-| --- | --- |
-| Not Too Much Silent | 켜 두면 일반 채팅방 메뉴와 **채팅 목록 길게 누르기 메뉴**의 기존 **알림 끄기**가 조용히 받기로 작동합니다. 푸시 수신을 켜 둔 채 이 기기에서 무음 채널로 표시하고, **알림 켜기**를 누르면 일반 알림으로 돌아갑니다. 채팅 목록의 음소거 아이콘과 길게 누르기 메뉴 라벨도 로컬 조용히 받기 상태를 반영합니다. OS에서 차단한 원래 채널은 우회하지 않습니다. |
-| Mute chat | 채팅방 메뉴의 **알림 완전히 숨기기**는 LINE의 기존 알림 끄기를 실행하고 로컬에서도 표시를 막습니다. 패치 설정에서 목록 확인·해제할 수 있습니다. 해제하면 숨기기 전의 조용히 받기 또는 일반 알림으로 돌아갑니다. |
-| More Chat Info | 최근 로컬 미확인 메시지 최대 25개를 시간순으로 대화형 알림에 전달합니다. 발신자별 묶음·줄바꿈·노출량은 Android가 결정합니다. 방 이름 옆 `[숫자]`는 전체 미확인 수이며 표시한 메시지 개수와 구분됩니다. 첫 푸시의 로컬 저장 전에는 기본 미리보기를 유지하고 저장 후 갱신합니다. S10e 합성 검사에서 발신자·본문 약 13.03sp, 그룹의 상단 방 이름 약 10sp를 확인했습니다. |
-| No reply | 추천 답장과 시스템 자동 제안을 해제합니다. 직접 입력하는 답장 버튼과 기존 PendingIntent는 유지합니다. |
-| Mark as read | 일반 채팅방의 개별 알림을 **읽음 / 답장**으로 바꿉니다. 읽음을 누르면 LINE 기본 경로로 방 전체를 읽고 해당 방 알림을 지웁니다. 로컬 저장 전에는 버튼을 보류합니다. More Chat Info를 꺼도 동작하며 여러 방 요약에는 읽음 버튼을 추가하지 않습니다. **S10e의 조용한 그룹 알림에서 읽음·알림 제거 확인, 전체 시험표는 일부 미검증.** |
-| Restore push registration | 재서명 후 Firebase Installations 등록 실패에 대응하는 **별도 선택 패치**입니다. 실제 수신 성공은 기기 검증이 필요합니다. |
-
-기능을 패치에 포함하는 것과 앱 안에서 켜는 것은 별도입니다. **앱의 기능 스위치는 모두 처음에 꺼져 있습니다.** OpenChat, 통화·진행 중 알림은 변경 대상에서 제외합니다.
-
-Not Too Much Silent를 끄면 저장한 조용히 받기 상태는 적용하지 않고 LINE 기본 설정을 따릅니다. 완전히 숨긴 방은 LINE 기본 알림도 꺼져 있으므로, 기능을 꺼도 숨김을 해제할 때까지 알림이 꺼진 상태로 남습니다.
-
-## 결과물
-
-- [공식 계정 테스트 봇 만들기·PC 발송 도구](docs/TEST_BOT.md). 개발용 도구이며 패치 묶음·LINE 앱에는 포함되지 않습니다.
-- [Morphe 가져오기·공개 절차](docs/PUBLISHING.md), [출처·라이선스·공개 전 검토](docs/PUBLICATION_AUDIT.md)
-- 묶음: `patches/build/libs/line-notification-patches-0.1.9-dev.mpp`
-- 빌드 정보·해시: `patches/build/libs/build-report.json`
-- 적용 결과·사용한 묶음 해시: `artifacts/validation-summary.json`
-- 기기 시험용 서명 APK: `artifacts/line-arm64-test.apk`, 정보·해시: `artifacts/test-apk.json` (선택형 FIS 복구 포함). 설치·실기기 결과는 `artifacts/device-validation.json`과 [실기기 시험표](docs/DEVICE_TESTS.md)에 기록합니다. 각 기록의 묶음 해시로 버전을 구분합니다.
-- 소스: `patches/src/main/kotlin/app/linenotifications`, `extensions/extension/src/main/java/app/linenotifications`
-- [호환성·구현 근거](docs/COMPATIBILITY.md), [실기기 시험표](docs/DEVICE_TESTS.md)
-
-글꼴·행간·아바타와 펼친 영역의 높이는 Android 대화형 알림 템플릿을 따릅니다. 고정 다섯 줄 레이아웃은 사용하지 않습니다. 발신자의 프로필 사진을 추가로 내려받지 않으며, 사진이 없는 Person은 시스템 기본 표시를 사용합니다.
-
-방 이름이 길면 접힌 알림에서 끝의 숫자까지 생략될 수 있습니다. 펼친 화면에서 확인할 수 있으며, 많은 내용이 표시될 때 하단 버튼의 노출도 시스템 화면 높이에 영향을 받습니다.
-
-`artifacts/*-validation-unsigned.apk`는 로컬 적용 검사용이며 서명되지 않아 설치용으로 사용할 수 없습니다. 원본 APK·분해한 LINE 소스·개발 도구는 소스 배포에 포함하지 않습니다.
-
-`python scripts/sign_test.py`는 검증된 ARM64 결과물에 로컬 시험용 키로 서명합니다. 키와 비밀번호는 Git에서 제외된 `.tools/signing`에 보관합니다. 향후 같은 키로 업데이트하려면 이 폴더를 보존해야 하며 외부에 공개하지 않습니다. 스크립트 자체는 기기에 설치하지 않습니다.
-
-## Morphe Manager에서 사용
-
-1. `.mpp`와 사용할 **원본 APKM 전체 파일**을 기기에 복사합니다. `base.apk`만 추출해서 사용하지 마세요. 라이브러리와 화면 리소스가 분할 파일에 있습니다.
-2. **Sources → + → Local**에서 `.mpp`를 가져옵니다. Patcher 2.3.0 기준입니다. Manager가 업데이트 필요 안내를 표시하면 호환되는 버전이 필요합니다. [공식 소스 추가 안내](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patch-sources.md)
-3. Expert mode와 해당 소스의 **Experimental app versions**를 켜고 LINE `26.16.0`, versionCode `261600106`을 선택합니다. [공식 Expert mode 안내](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patching-expert-mode.md)
-4. 사용할 기능인 `Not Too Much Silent`, `More Chat Info`, `No reply`, `Mark as read`를 선택합니다. 공통 설정·연결 패치는 의존성으로 포함됩니다. `Mark as read`만 선택해도 되며 다른 세 기능에 의존하지 않습니다. 일반 재서명 설치에서 푸시 등록이 실패하면 `Restore push registration`도 선택해 원본으로 다시 패치합니다. microG는 기본 의존성이 아닙니다.
-5. 패치 후 설치합니다. 공식 LINE과 서명이 달라 일반 설치에서는 덮어쓰기가 안 될 수 있습니다. **기존 앱을 제거하기 전에 대화 백업과 계정 복구 수단을 확인하세요.** 프로젝트 스크립트는 앱 설치·삭제·로그인을 실행하지 않습니다.
-6. LINE 기본 설정의 프로필 아래 **알림 패치 설정**에서 사용할 기능을 켭니다. Mark as read도 최초에는 꺼져 있으며, 켜거나 끄면 표시 중인 알림 버튼을 갱신합니다. LINE의 제목 바·설정 행·스위치를 사용하는 전체 화면입니다. Not Too Much Silent를 켠 뒤 채팅방 메뉴 또는 **채팅 목록 길게 누르기 메뉴**의 기존 **알림 끄기**를 누르면 조용히 받기가 됩니다. 알림을 전혀 표시하지 않을 방은 **알림 완전히 숨기기**로 지정합니다.
-
-이전 버전이나 다른 기기에서 이미 LINE 기본 알림을 꺼 둔 방은 자동 전환하지 않습니다. 해당 방에서 **알림 켜기 → 알림 끄기**를 한 번 실행하면 새 방식의 조용히 받기로 지정됩니다.
-
-무음 채널은 소리·진동·팝업 없이 생성합니다. 이후 Android 설정에서 사용자가 채널을 변경하면 OS 설정이 우선하며 패치는 이를 강제로 되돌리지 않습니다. [Android 채널 설정 설명](https://developer.android.com/develop/ui/compose/notifications/channels)
-
-## 로컬 빌드 (Windows x64)
-
-Python 3.11 이상이 필요합니다. 현재 작업 폴더의 도구는 이미 준비되어 있습니다. 새 환경에서는 아래 순서로 실행합니다.
+Releases are produced via GitHub Actions (`Actions → Release → Run workflow` on `main`) using the pinned standalone Python build scripts (the template's npm semantic-release workflow is unused). Requires Python 3.11+:
 
 ```powershell
 python scripts/bootstrap.py
@@ -81,32 +51,31 @@ python scripts/build.py
 python scripts/validate.py
 ```
 
-`bootstrap.py`는 공식 배포처의 JDK 21.0.13+9, Kotlin 2.4.21, Morphe Desktop 2.1.1, Android SDK 도구를 `.tools`에 준비하고 다운로드 SHA-256을 확인합니다. 새 SDK 환경에서는 터미널의 라이선스 안내를 따릅니다. 시스템 PATH를 변경하지 않습니다.
+* `scripts/bootstrap.py`: Downloads pinned JDK 21.0.13+9, Kotlin 2.4.21, Morphe Desktop 2.1.1, and Android SDK tools into `.tools/` with SHA-256 verification and Zip Slip checks. Never downloads or installs LINE.
+* `scripts/build.py`: Runs `NotificationPolicy` unit tests (86 assertions), SQLite history regression tests, compiles the Java extension and Kotlin patches, converts to DEX with D8, packages `patches/build/libs/line-notification-patches-<version>.mpp`, and verifies patch loading via Morphe Desktop.
+* `scripts/validate.py`: Requires the two pinned original APKM files in `apk/` (not distributed in this repo), applies all patches with `--validate --bytecode-mode FULL`, and executes `ApkContractTest` (1,075 contract assertions each for ARM64 & Universal, plus 1,035 for `Mark as read`-only). Does not sign or install.
+* `scripts/sign_test.py`: Optional local helper to sign the validated ARM64 APK using a persistent local key under gitignored `.tools/signing/`.
+* Standard Gradle build files (`./gradlew buildAndroid`) are also retained for environments with GitHub Packages credentials.
 
-`build.py`는 정책 단위 테스트, 컴파일, D8 변환, Morphe 패치 목록 로딩 검사 후 `.mpp`를 생성합니다. Kotlin 메타데이터는 사용한 D8과 맞도록 2.0 수준으로 생성합니다. 묶음에 JVM 클래스·Android DEX·확장 DEX를 포함합니다.
+## Privacy, data handling, and limitations
 
-`validate.py`는 `apk/`에 제공된 **두 파일 이름과 해시**를 요구합니다. 각각 병합하고 모든 패치를 `--validate --bytecode-mode FULL`로 적용한 뒤 실제 APK의 메서드 연결·호출 개수·설정 플래그를 검사합니다. 서명·설치하지 않습니다.
+* **Read-only local inspection**: Reads LINE's local SQLite databases (`naver_line`, `contact`) with `SQLiteDatabase.OPEN_READONLY` and reads sender avatars exclusively from LINE's local Glide cache (`onlyRetrieveFromCache(true)`). No external servers, telemetry, background polling, image downloads, or chat log exports exist in the extension.
+* **Native user-initiated server calls**: Toggling room notifications (`ue3.k.p`) or pressing **Mark as read** (`qg3.e.e`) invokes LINE's existing internal handlers on explicit user action, which triggers LINE's normal server sync. Because quiet mode keeps server push subscriptions enabled and silences locally, **other devices (PC, tablet, secondary phone) may still show that chat as notifications enabled.**
+* **Privacy & lock screen**: Respects LINE's **Show message preview** setting (no message body lookup when disabled), keeps `VISIBILITY_PRIVATE` and `publicVersion` redaction, and rechecks active account and read boundaries before posting.
+* **Debug logging**: `LineNotifyPatch` logs are disabled by default (`Log.isLoggable`) and output only fixed stage names—never account IDs, chat IDs, message text, or exception messages.
+* **No ban-safety guarantee**: Minimizing patch scope does not mean LY/LINE's Terms of Service permit modified or re-signed clients. **No guarantee against account restriction or service disruption can be made.** Use at your own risk and maintain backups.
+* **No proprietary assets distributed**: Original/patched LINE APKs, APKMs, signing keys, tokens, and private logs are never published in this repository or its releases.
 
-공식 Gradle 템플릿도 유지했습니다. GitHub Packages 의존성을 읽을 수 있는 환경에서는 `./gradlew.bat buildAndroid`를 사용할 수 있습니다. 현재는 해당 인증 없이 공개 도구 기반 빌드 경로를 검증했습니다. [Morphe 개발 문서](https://github.com/MorpheApp/morphe-documentation/tree/main/docs/morphe-development)
+## Documentation
 
-## 데이터와 제한
+* [Compatibility & DEX implementation notes](docs/COMPATIBILITY.md)
+* [Device & cross-environment test matrix](docs/DEVICE_TESTS.md)
+* [Publication status & release hashes](docs/PUBLICATION_STATUS.md)
+* [Publishing & Morphe import guide](docs/PUBLISHING.md)
+* [Pre-publication provenance & compliance audit](docs/PUBLICATION_AUDIT.md)
+* [Android MessagingStyle reference notes](docs/KAKAO_NOTIFICATION_REFERENCE.md)
+* [Local Official Account test sender tool](docs/TEST_BOT.md) *(developer tool; not bundled in `.mpp`)*
 
-- LINE의 로컬 대화 데이터를 읽기 전용으로 조회합니다. 별도 메시지 서버 조회·주기적 수집·대화 로그·파일 복사는 없습니다. 조용히 받기 상태와 숨김 목록은 계정·채팅방 ID별로 앱의 로컬 설정에 저장합니다. 펼친 대화형 알림의 프로필 사진은 원본 알림 아이콘과 LINE의 로컬 Glide 캐시 전용(`onlyRetrieveFromCache(true)`)으로만 읽으며 추가 이미지 네트워크 요청을 만들지 않습니다.
-- 사용자가 방 알림 설정을 바꿀 때 필요한 경우 LINE의 기존 알림 설정 처리 경로를 호출합니다. 조용히 받기는 기본 푸시 수신을 켜 두고 로컬에서만 무음 처리하므로, PC·태블릿·보조폰 등 다른 기기에서는 해당 방이 알림 켜짐 상태로 보일 수 있습니다. 완전 숨김은 LINE 기본 알림을 끕니다. 새 서버 API나 메시지 수집 경로를 추가하지 않으며 기존 방 설정을 일괄 변경하지 않습니다.
-- 문제 재현 시 ADB로 `LineNotifyPatch` 태그를 명시적으로 활성화하면 고정된 처리 단계 이름만 로그에 기록합니다. 평소에는 꺼져 있으며 계정·채팅방 식별자, 메시지 내용, 예외 메시지는 기록하지 않습니다.
-- 전체 미확인 개수는 LINE의 값을 사용합니다. 조회 중 계정·읽음 상태가 바뀌면 해당 알림 갱신을 취소합니다.
-- 읽음은 사용자가 버튼을 눌렀을 때만 LINE의 기본 객체로 실행합니다. 로컬 상태 갱신·읽음 전송·오프라인 재시도는 LINE에 맡기며 직접 DB를 쓰거나 별도 서버 API를 추가하지 않습니다. 완료 콜백은 서버의 읽음 수신 확인을 뜻하지 않습니다. 펼치기·스와이프 삭제에는 읽음 동작을 연결하지 않습니다.
-- 읽음 실행 전과 완료 후 계정을 확인합니다. 같은 방의 처리 중 연속 탭은 합치며, 계정 불일치·지원하지 않는 방·연결 실패에서는 알림부터 지우지 않습니다. 기능을 끄면 기존 알림 끄기 / 답장으로 돌아가며 조용히 받기·완전 숨김 지정은 바꾸지 않습니다.
-- 0.1.5는 LINE의 로컬 메시지 저장 완료 시 표시 중인 알림만 갱신합니다. 읽음 경계 안의 이전 메시지는 다시 표시하지 않으며, 갱신 직전에 활성 알림·게시 시각·메시지 식별자를 재확인합니다. 삭제와 갱신을 원자적으로 묶는 Android API는 없어 동시 삭제 시점까지 보장하지는 않습니다. 주기적 조회나 별도 네트워크 요청은 없습니다.
-- LINE의 내용 표시가 꺼져 있으면 본문을 추가 조회하지 않습니다. 기존 공개 알림·잠금화면 공개 범위를 유지하고 원래 채널의 차단·비공개 설정도 확인합니다.
-- 본문 없는 사진·스티커 등은 `[첨부 메시지]`로 표시합니다. 첨부 파일을 다운로드하지 않습니다.
-- 로컬 데이터가 아직 없거나 조회가 실패하면 More Chat Info를 적용하지 못할 수 있습니다. 무음 기능 활성 상태에서 계정·숨김 여부 확인에 실패하면 완전히 숨긴 방이 노출되지 않도록 해당 알림을 생략합니다.
-- LINE 기본 알림을 다른 경로에서 끄면 백그라운드 수신이 다시 중단될 수 있습니다. 0.1.3의 조용히 받기는 연결한 채팅방 메뉴의 기존 버튼을 사용합니다. 다른 기기에서 읽은 결과 역시 LINE의 동기화·알림 갱신 경로에 의존합니다.
-- 푸시 호환 패치는 FIS 요청의 `X-Android-Cert`만 검증한 원본 서명 값으로 바꿉니다. Remote Config, LINE 인증·대화 프로토콜, Play Integrity는 변경하지 않습니다.
-- **계정 정지 위험이 없다는 보장은 할 수 없습니다.** 변경 범위를 줄였다는 사실과 서비스가 변조 앱을 허용한다는 것은 별개입니다. 실기기·계정 시험 전에는 안정화 완료로 취급하지 않습니다.
+## License & attribution
 
-## 라이선스
-
-[GPL-3.0](LICENSE), [이름·상표 고지](NOTICE), [원본·참고 구현 출처](THIRD_PARTY_NOTICES.md). LINE 및 Morphe의 공식 프로젝트가 아닙니다.
-
-Mark as read가 꺼져 있을 때 알림창의 ‘알림 끄기’도 조용히 받기로 연결됩니다. 현재 버튼 전환 범위는 채팅방 메뉴, 채팅 목록 길게 누르기 메뉴, 알림창입니다. 검색 결과의 별도 알림 설정은 LINE 기본 동작을 유지합니다.
+Licensed under [GPL-3.0](LICENSE) with the additional naming notice retained in [NOTICE](NOTICE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full provenance and modification notices. Not affiliated with or endorsed by LINE, LY Corporation, or Morphe.

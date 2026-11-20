@@ -1,25 +1,32 @@
-# Morphe에서 사용·공개하는 방법
+# Using and Publishing with Morphe
 
-확인일: 2026-11-18. LINE 26.16.0용 독립 실험 패치입니다. [공개 상태와 검증 범위](PUBLICATION_STATUS.md)를 확인하세요.
+Updated: 2026-11-20. This is an independent community patch bundle and is not an official LINE or Morphe product. See [Publication status](PUBLICATION_STATUS.md) for current release hashes and verification scope.
 
-## 원격 소스로 추가
+## Adding as a remote source
 
-1. Patcher 2.3.0을 지원하는 Morphe Manager를 사용합니다.
-2. [Manager에 소스 추가](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches)를 열거나 Sources → + → Remote에 `https://github.com/gomjirak0803/line-notification-patches`를 넣습니다.
-3. 소스의 **Pre-release patches**, **Experimental app versions**를 켭니다. 앱 자체의 사전 업데이트 설정과는 별도입니다.
-4. Expert mode에서 본인이 준비한 LINE 26.16.0 원본 APKM 전체를 선택하고 필요한 패치를 적용합니다. 자세한 안내는 [README](../README.md)와 [호환성 문서](COMPATIBILITY.md)를 따릅니다.
+1. Use Morphe Manager supporting **Patcher 2.3.0** (verified on Morphe Manager `2.6.0`).
+2. Open [Add source to Morphe Manager](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) or enter `https://github.com/gomjirak0803/line-notification-patches` under **Sources → + → Remote**.
+3. Enable **Pre-release patches** and **Experimental app versions** on the source card (separate from the Morphe Manager app's own pre-release update toggle).
+4. In **Expert mode**, select your own official **LINE `26.16.0` (`261600106`) full APKM** and choose the patches you want. See [README.md](../README.md) and [COMPATIBILITY.md](COMPATIBILITY.md) for details.
 
-Desktop에서 공개 주소 다운로드와 패치 로딩을 확인했습니다. Manager UI에서 직접 가져오는 시험은 아직 수행하지 않았습니다. [공식 Manager 안내](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patch-sources.md)
+Live remote source addition, auto-update (`0.1.8-dev → 0.1.9-dev`), and on-device patching of LINE `26.16.0` ARM64 APKM have been verified on Morphe Manager `2.6.0` (Galaxy S10e, Android 12). See [official Morphe patch sources documentation](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patch-sources.md).
 
-## 파일로 가져오기
+## Importing locally
 
-[릴리스](https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.8-dev)의 `.mpp`를 내려받아 Sources → + → Local에서 선택합니다. 로컬 소스는 다음 버전을 Update에서 직접 골라야 합니다. `SHA256SUMS.txt`로 파일을 비교할 수 있습니다. 현재 MPP에는 배포자 서명이 없습니다.
+Download the `.mpp` bundle from [GitHub Releases](https://github.com/gomjirak0803/line-notification-patches/releases) and import it via **Sources → + → Local**. Local sources do not auto-update; select newer `.mpp` files manually via **Update**. Compare file integrity against `SHA256SUMS.txt`. Publisher signatures (`signature_download_url`) are not currently configured.
 
-## 다음 버전 릴리스
+## Cutting a new release
 
-1. 수정 소스·변경 기록·검증 결과와 `scripts/build.py`의 VERSION 등 버전 표기를 main에 반영합니다. 새 버전에는 새 태그를 사용합니다.
-2. Actions → Release → Run workflow에서 main을 선택합니다. Windows standalone 빌드가 정책·SQL 검사와 MPP 로딩을 수행합니다. 기존 npm semantic-release 설정은 사용하지 않습니다.
-3. 같은 버전의 수정 소스와 MPP, LICENSE·NOTICE·THIRD_PARTY_NOTICES, 해시를 사전 릴리스에 함께 게시하고 main의 메타데이터를 갱신합니다.
-4. 공개 파일과 패치 목록을 확인합니다. 앱 실행 코드가 바뀌었으면 실기기에서 알림 수신·읽음·후속 새 메시지를 다시 시험합니다.
+Release automation runs in `.github/workflows/release.yml` using the **Windows standalone build** (`scripts/bootstrap.py`, `scripts/build.py`, `scripts/prepare_release.py`). The template's npm semantic-release configuration is not used.
 
-LINE APK·APKM, 개인 서명키, 진단 로그·화면·DB는 공개 배포에서 제외합니다. 배포 채널은 GitHub이며 커뮤니티 인덱스에는 제출하지 않았습니다. 등재 없이도 저장소 주소로 추가할 수 있습니다.
+1. Commit updated source code, version (`VERSION` in `scripts/build.py`), release notes (`docs/RELEASE_NOTES.md`), and verification records (`docs/DEVICE_TESTS.md`) to `main`. Never overwrite existing published release tags.
+2. Trigger **Actions → Release → Run workflow** on `main`.
+3. The workflow prepares pinned tools, runs policy and SQLite unit tests, builds and load-tests the `.mpp`, and calls `scripts/prepare_release.py` to generate `patches-list.json`, `patches-bundle.json` (with `YYYY-MM-DDTHH:MM:SS` UTC `created_at` compatible with Morphe Manager's `LocalDateTimeSerializer`), the source ZIP, license/notice copies, and `SHA256SUMS.txt`.
+4. The workflow creates a GitHub pre-release (`v<version>`) and pushes updated `patches-bundle.json` and `patches-list.json` to `main`.
+5. Download the published `.mpp`, verify its SHA-256 and ZIP entry parity against the locally tested bundle, and record the hashes in [PUBLICATION_STATUS.md](PUBLICATION_STATUS.md).
+
+Original/patched LINE APKs/APKMs, `.tools/signing`, diagnostic logs, screenshots, and databases are excluded from Git and release archives. Each release ships the `.mpp` alongside the matching source ZIP, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, and build scripts.
+
+## Community index
+
+You can submit the public repository URL (`https://github.com/gomjirak0803/line-notification-patches`) via **Submit a bundle** on [Morphe Community Patches](https://morphe-patches.software/). Even before indexing, the direct remote source link works immediately in Morphe Manager. Listing on the community directory does not imply official authorship or security endorsement.
