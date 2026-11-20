@@ -1,6 +1,16 @@
 # 공개 상태 — 2026-11-20
 
-## 최신 릴리스 (`v0.1.10-dev`)
+## 최신 릴리스 (`v0.1.11-dev`)
+
+- 저장소: https://github.com/gomjirak0803/line-notification-patches
+- 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.11-dev
+- Manager 추가: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
+- 빌드 실행: https://github.com/gomjirak0803/line-notification-patches/actions/runs/44724380693 (성공, 1m12s)
+- 릴리스 소스 커밋: `0a34c85f49ff67ad40fc0d1bf7899e0da3defa4b` (메타데이터 갱신 커밋: `1d0d45f`)
+
+공개 MPP의 SHA-256은 `2eb3a9df3113c288549ddcc1c495a868c307e585fbeb146a05af855743cbb891`이며 129,907바이트입니다. `SHA256SUMS.txt`·직접 내려받은 파일 해시가 일치했고, 로컬 빌드 `e8cd50e81f6133f2561d18e78ad46ebe96b239e7a11aec3a353447d29a865f57`과 ZIP 항목별(17개) 대조 결과 실행 클래스·DEX·확장·Manifest는 모두 동일하며 차이는 `THIRD_PARTY_NOTICES.md` 줄바꿈(CRLF/LF)뿐입니다. 같은 버전 소스 ZIP의 SHA-256은 `9026b7fc0fd8fa28b9c5122217bfa29a4ccc2df7cb876abf3c48936beaca5d59`입니다. `main/patches-bundle.json`은 `"created_at": "2026-11-20T11:04:15"`, `"version": "0.1.11-dev"`로 갱신됐으며 `tests/test_bundle_metadata.py` 3개 검사를 통과했습니다.
+
+## 이전 릴리스 기록 (`v0.1.10-dev`, 2026-11-20)
 
 - 저장소: https://github.com/gomjirak0803/line-notification-patches
 - 릴리스: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.10-dev
