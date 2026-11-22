@@ -8,14 +8,18 @@ All user-facing strings (settings entry/page, hidden-chat page, dialogs, toasts,
 * **Compiled resource check** (`aapt2 dump resources`, ARM64 and Universal validation APKs): 39 `string/line_notify_*` keys, no key missing in any of the 7 locales.
 * **SHA-256**: bundle `061d3091dce1aa0c53610272e13bbd911434a282a9ebbeef0e3f210e9d28a54c`, unsigned ARM64 APK `f0ce42afe9dec4310d6f1f554afe75cb1f2e4bc9b2e28e0f87520d35c3005a25`, signed test APK `34fe48ece6295442dcc1074152fc3a19a76a2818cc467c686403199cf3202528`.
 
-### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1)
-| Check | Result |
+### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1) — All 7/7 locales verified
+| Check / Locale | Result |
 | --- | --- |
 | Same-key update | `adb install -r` succeeded with data preserved; installed `base.apk` SHA-256 matched `34fe48ec…` |
-| Korean (device default) | Settings row `알림 패치 설정`; page shows `알림 표시`, `완전히 숨긴 채팅방`, `알림 버튼`, `적용 범위` with Korean descriptions; all 4 switches ON; hidden-chats subpage header/description in Korean |
-| English (LINE Settings → Language → English) | Settings row became `Notification patch settings`; page shows `Notification display`, `Completely hidden chats`, `Notification actions`, `Scope` with English descriptions for all 4 patches; hidden-chats subpage in English; 4 switches ON |
-| Restore | Language set back to the original `Auto (Default)`; `알림 패치 설정` returned |
-| Stability | 0 `AndroidRuntime`/`FATAL` entries in logcat; no chat was opened during the test |
+| `ko` (device default) | Settings row `알림 패치 설정`; page (`알림 표시`, `완전히 숨긴 채팅방`, `알림 버튼`, `적용 범위`), descriptions, 4 switches ON, and hidden-chats subpage verified |
+| `en` (`English`) | Settings row `Notification patch settings` (`[153..759]`); page (`Notification display`, `Completely hidden chats`, `Notification actions`, `Scope`), descriptions, 4 switches ON, subpage verified |
+| `ja` (`日本語`) | Settings row `通知パッチ設定` (`[153..495]`); page (`通知の表示`, `完全に非表示のトーク`, `通知ボタン`, `適用範囲`), descriptions, 4 switches ON, subpage verified |
+| `zh-rTW` (`中文 (台灣)`) | Settings row `通知修補設定` (`[153..471]`); page (`通知顯示`, `完全隱藏的聊天室`, `通知按鈕`, `適用範圍`), descriptions, 4 switches ON, subpage verified |
+| `zh-rCN` (`中文 (中国)`) | Settings row `通知补丁设置` (`[153..471]`); page (`通知显示`, `完全隐藏的聊天室`, `通知按钮`, `适用范围`), descriptions, 4 switches ON, subpage verified |
+| `th` (`ไทย`) | Settings row `การตั้งค่าแพตช์การแจ้งเตือน` (`[153..815]`); page (`การแสดงการแจ้งเตือน`, `แชตที่ซ่อนทั้งหมด`, `ปุ่มการแจ้งเตือน`, `ขอบเขตการใช้งาน`), descriptions, 4 switches ON, subpage verified |
+| `in` (`Indonesia`) | Settings row `Pengaturan patch notifikasi` (`[153..781]`); page (`Tampilan notifikasi`, `Obrolan tersembunyi sepenuhnya`, `Tombol notifikasi`, `Cakupan`), descriptions, 4 switches ON, subpage verified |
+| Restore & stability | Restored to `Auto (Default)` (`알림 패치 설정` confirmed returned); 0 `AndroidRuntime`/`FATAL` errors in logcat; no chat was opened during testing |
 
 ## `0.1.11-dev` Expanded notification sender avatars (local cache only) — 2026-11-20
 
