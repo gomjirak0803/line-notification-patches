@@ -1,5 +1,22 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.1.12-dev` Multi-language (i18n) verification — 2026-11-23
+
+All user-facing strings (settings entry/page, hidden-chat page, dialogs, toasts, notification channel names, redacted lock-screen text, `Mark as read` / `No reply` button labels and placeholders) now come from standard Android string resources in 7 locales (`values` English default, `ko`, `ja`, `zh-rTW`, `zh-rCN`, `th`, `in`), resolved through the Activity context so LINE's in-app language override is respected. The four canonical patch names stay in English.
+
+* **Automated checks**: 86 `NotificationPolicy` assertions, 18 Python unit tests (including `test_i18n_resources.py`: 7 qualifiers × 39 `line_notify_*` keys, no empty/raw-quote values, zero hardcoded Hangul outside `NotificationStrings.kt`), 1,179 static APK contracts (ARM64), 1,179 (Universal), 1,139 (`Mark as read`-only).
+* **Compiled resource check** (`aapt2 dump resources`, ARM64 and Universal validation APKs): 39 `string/line_notify_*` keys, no key missing in any of the 7 locales.
+* **SHA-256**: bundle `061d3091dce1aa0c53610272e13bbd911434a282a9ebbeef0e3f210e9d28a54c`, unsigned ARM64 APK `f0ce42afe9dec4310d6f1f554afe75cb1f2e4bc9b2e28e0f87520d35c3005a25`, signed test APK `34fe48ece6295442dcc1074152fc3a19a76a2818cc467c686403199cf3202528`.
+
+### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1)
+| Check | Result |
+| --- | --- |
+| Same-key update | `adb install -r` succeeded with data preserved; installed `base.apk` SHA-256 matched `34fe48ec…` |
+| Korean (device default) | Settings row `알림 패치 설정`; page shows `알림 표시`, `완전히 숨긴 채팅방`, `알림 버튼`, `적용 범위` with Korean descriptions; all 4 switches ON; hidden-chats subpage header/description in Korean |
+| English (LINE Settings → Language → English) | Settings row became `Notification patch settings`; page shows `Notification display`, `Completely hidden chats`, `Notification actions`, `Scope` with English descriptions for all 4 patches; hidden-chats subpage in English; 4 switches ON |
+| Restore | Language set back to the original `Auto (Default)`; `알림 패치 설정` returned |
+| Stability | 0 `AndroidRuntime`/`FATAL` entries in logcat; no chat was opened during the test |
+
 ## `0.1.11-dev` Expanded notification sender avatars (local cache only) — 2026-11-20
 
 Added sender profile `Icon` support to `ConversationPreview` (`Notification.MessagingStyle`): 1:1 chats reuse LINE's original `largeIcon`/`sender_person` icon, while multi-sender group chats read `contacts.picture_path` and LINE's local Glide cache exclusively (`onlyRetrieveFromCache(true)`, `DiskCacheStrategy.DATA`, `circleCrop()`, max 8 distinct senders, `64–128px`, 150ms timeout) with zero network requests. Moved trailing 400ms active-notification refreshes (`deferRefresh`) onto a background worker thread.
