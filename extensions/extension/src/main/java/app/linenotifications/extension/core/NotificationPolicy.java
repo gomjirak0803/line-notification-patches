@@ -215,6 +215,47 @@ public final class NotificationPolicy {
         return Collections.unmodifiableList(new ArrayList<Message>(ordered.subList(first, ordered.size())));
     }
 
+    private static final String[] PLACEHOLDER_DEFAULT = {"line_notify_attachment_placeholder", "[Attachment]"};
+    private static final String[] PLACEHOLDER_PHOTO = {"line_notify_attachment_photo", "[Photo]"};
+    private static final String[] PLACEHOLDER_VIDEO = {"line_notify_attachment_video", "[Video]"};
+    private static final String[] PLACEHOLDER_STICKER = {"line_notify_attachment_sticker", "[Sticker]"};
+    private static final String[] PLACEHOLDER_AUDIO = {"line_notify_attachment_audio", "[Voice message]"};
+    private static final String[] PLACEHOLDER_FILE = {"line_notify_attachment_file", "[File]"};
+    private static final String[] PLACEHOLDER_LOCATION = {"line_notify_attachment_location", "[Location]"};
+    private static final String[] PLACEHOLDER_CONTACT = {"line_notify_attachment_contact", "[Contact]"};
+    private static final String[] PLACEHOLDER_CALL = {"line_notify_attachment_call", "[Call]"};
+    private static final String[] PLACEHOLDER_GIFT = {"line_notify_attachment_gift", "[Gift]"};
+    private static final String[] PLACEHOLDER_MUSIC = {"line_notify_attachment_music", "[Music]"};
+
+    private static String[] attachmentSpec(int attachmentType) {
+        // Maps LINE chat_history.attachement_type (ContentType ordinals) to localized resource keys.
+        switch (attachmentType) {
+            case 1:
+            case 21: return PLACEHOLDER_PHOTO;
+            case 2: return PLACEHOLDER_VIDEO;
+            case 7: return PLACEHOLDER_STICKER;
+            case 3: return PLACEHOLDER_AUDIO;
+            case 5:
+            case 14: return PLACEHOLDER_FILE;
+            case 15: return PLACEHOLDER_LOCATION;
+            case 13: return PLACEHOLDER_CONTACT;
+            case 6: return PLACEHOLDER_CALL;
+            case 9: return PLACEHOLDER_GIFT;
+            case 19: return PLACEHOLDER_MUSIC;
+            default: return PLACEHOLDER_DEFAULT;
+        }
+    }
+
+    /** Returns the Android string resource key for a LINE `attachement_type` code. */
+    public static String attachmentPlaceholderKey(int attachmentType) {
+        return attachmentSpec(attachmentType)[0];
+    }
+
+    /** Returns the English fallback label for a LINE `attachement_type` code. */
+    public static String attachmentPlaceholderFallback(int attachmentType) {
+        return attachmentSpec(attachmentType)[1];
+    }
+
     private static String requiredId(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.trim().isEmpty()) throw new IllegalArgumentException(name + " is empty");

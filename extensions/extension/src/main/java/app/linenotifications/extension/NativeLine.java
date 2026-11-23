@@ -33,7 +33,7 @@ final class NativeLine {
     // Server ids bound the native read boundary, but are not necessarily chronological
     // within a Messaging API batch. Select the same latest-by-time order used to render.
     static final String RECENT_MESSAGES_SQL =
-            "SELECT server_id, created_time, from_mid, content FROM chat_history "
+            "SELECT server_id, created_time, from_mid, content, attachement_type FROM chat_history "
             + "WHERE chat_id = ? AND from_mid IS NOT NULL AND from_mid != ? "
             + "AND CAST(server_id AS INTEGER) > ? "
             + "ORDER BY created_time DESC, CAST(server_id AS INTEGER) DESC LIMIT ?";
@@ -142,7 +142,12 @@ final class NativeLine {
                 String id = cursor.getString(0), senderId = cursor.getString(2), body = cursor.getString(3);
                 long numericId;
                 try { numericId = Long.parseLong(id); } catch (NumberFormatException ignored) { continue; }
-                if (body == null || body.isEmpty()) body = Strings.get("line_notify_attachment_placeholder", "[Attachment]");
+                if (body == null || body.isEmpty()) {
+                    int attachmentType = cursor.isNull(4) ? 0 : cursor.getInt(4);
+                    body = Strings.get(
+                            NotificationPolicy.attachmentPlaceholderKey(attachmentType),
+                            NotificationPolicy.attachmentPlaceholderFallback(attachmentType));
+                }
                 String sender = senders.get(senderId);
                 if (sender == null) {
                     sender = senderName(senderId);

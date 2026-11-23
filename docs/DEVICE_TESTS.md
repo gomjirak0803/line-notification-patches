@@ -1,5 +1,14 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.1.13-dev` Typed attachment placeholders in `More Chat Info` — 2026-11-23
+
+Added `attachement_type` lookup to `NativeLine.RECENT_MESSAGES_SQL` and mapped LINE's `ContentType` ordinals in `NotificationPolicy.attachmentPlaceholderKey`/`Fallback` across all 7 supported locales (`[Photo]`, `[Video]`, `[Sticker]`, `[Voice message]`, `[File]`, `[Location]`, `[Contact]`, `[Call]`, `[Gift]`, `[Music]`, with `[Attachment]` fallback).
+
+* **Automated checks**: 130 `NotificationPolicy` assertions, 19 Python unit tests (including `test_selects_attachment_type_including_null` and `test_i18n_resources.py` covering 7 qualifiers × 49 `line_notify_*` keys), 1,187 static APK contracts (ARM64), 1,187 (Universal), 1,147 (`Mark as read`-only).
+* **Compiled resource check** (`aapt2 dump resources`, ARM64 and Universal validation APKs): 49 `string/line_notify_*` keys, 0 missing locales across `default`, `ko`, `ja`, `zh-rTW`, `zh-rCN`, `th`, `in`.
+* **SHA-256**: bundle `6bd69dc56b516d282f394492848af2b4aac7ea8c32c5c23bc865978805eaeb7d`, unsigned ARM64 APK `224124051d3ea3e58078d7946fdd38e46ab4d9f843745a9f4e2abfdc8abd2b5c`, signed test APK `6da04e48ab131e34a7c646c8a90f91fab42b0a2bca9445b34b57cd24cd1bef5e`.
+* **Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1)**: Data-preserving `adb install -r` succeeded; installed `base.apk` SHA-256 matched `6da04e48…`; `알림 패치 설정` smoke check passed with all 4 switches ON and 0 logcat errors; user confirmed live incoming non-text notifications display distinct localized attachment labels.
+
 ## `0.1.12-dev` Multi-language (i18n) verification — 2026-11-23
 
 All user-facing strings (settings entry/page, hidden-chat page, dialogs, toasts, notification channel names, redacted lock-screen text, `Mark as read` / `No reply` button labels and placeholders) now come from standard Android string resources in 7 locales (`values` English default, `ko`, `ja`, `zh-rTW`, `zh-rCN`, `th`, `in`), resolved through the Activity context so LINE's in-app language override is respected. The four canonical patch names stay in English.

@@ -30,6 +30,7 @@ public final class NotificationPolicyTest {
         independentTogglesAndUnavailableMetadata();
         invalidMetadataFailsClearly();
         pushBeforeLocalPersistence();
+        attachmentPlaceholderCases();
         System.out.println("NotificationPolicy: " + assertions + " assertions passed");
     }
 
@@ -229,6 +230,36 @@ public final class NotificationPolicyTest {
         expectInvalid(new Runnable() { public void run() {
             new Message("message", 1, 1, " ", "Display name", "Text");
         } });
+    }
+
+    private static void attachmentPlaceholderCases() {
+        int[] types = {1, 21, 2, 7, 3, 5, 14, 15, 13, 6, 9, 19};
+        String[] keys = {
+                "line_notify_attachment_photo", "line_notify_attachment_photo",
+                "line_notify_attachment_video", "line_notify_attachment_sticker",
+                "line_notify_attachment_audio", "line_notify_attachment_file",
+                "line_notify_attachment_file", "line_notify_attachment_location",
+                "line_notify_attachment_contact", "line_notify_attachment_call",
+                "line_notify_attachment_gift", "line_notify_attachment_music",
+        };
+        String[] fallbacks = {
+                "[Photo]", "[Photo]", "[Video]", "[Sticker]", "[Voice message]",
+                "[File]", "[File]", "[Location]", "[Contact]", "[Call]", "[Gift]", "[Music]",
+        };
+        for (int i = 0; i < types.length; i++) {
+            check(keys[i].equals(NotificationPolicy.attachmentPlaceholderKey(types[i])),
+                    "Attachment key for " + types[i]);
+            check(fallbacks[i].equals(NotificationPolicy.attachmentPlaceholderFallback(types[i])),
+                    "Attachment fallback for " + types[i]);
+        }
+        for (int fallbackType : new int[]{-1, 0, 4, 8, 10, 16, 17, 20, 22, 99}) {
+            check("line_notify_attachment_placeholder".equals(
+                            NotificationPolicy.attachmentPlaceholderKey(fallbackType)),
+                    "Default attachment key for " + fallbackType);
+            check("[Attachment]".equals(
+                            NotificationPolicy.attachmentPlaceholderFallback(fallbackType)),
+                    "Default attachment fallback for " + fallbackType);
+        }
     }
 
     private static Snapshot snapshot(boolean muted) {

@@ -18,12 +18,12 @@ def production_query():
 class MessageHistoryTest(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
-        self.db.execute("CREATE TABLE chat_history(server_id TEXT, created_time INTEGER, from_mid TEXT, content TEXT, chat_id TEXT)")
+        self.db.execute("CREATE TABLE chat_history(server_id TEXT, created_time INTEGER, from_mid TEXT, content TEXT, chat_id TEXT, attachement_type INTEGER)")
         # The first batch's third message has the smallest server id. The old
         # server-id LIMIT kept message 1 and dropped message 3 instead of message 1.
         ids = [103, 104, 101, 102, 105] + list(range(106, 127))
-        self.db.executemany("INSERT INTO chat_history VALUES(?,?,?,?,?)",
-                            [(str(sid), index, "peer", str(index), "test-room") for index, sid in enumerate(ids, 1)])
+        self.db.executemany("INSERT INTO chat_history VALUES(?,?,?,?,?,?)",
+                            [(str(sid), index, "peer", str(index), "test-room", 0) for index, sid in enumerate(ids, 1)])
 
     def tearDown(self):
         self.db.close()
@@ -38,17 +38,32 @@ class MessageHistoryTest(unittest.TestCase):
         self.assertTrue(all(int(row[0]) > 104 for row in self.selected(lower=104)))
 
     def test_other_rooms_self_and_unsent_messages_do_not_leak(self):
-        self.db.executemany("INSERT INTO chat_history VALUES(?,?,?,?,?)", [
-            ("900", 999, "peer", "wrong-room", "other-room"),
-            ("901", 999, "self", "outgoing", "test-room"),
-            ("902", 999, None, "no-sender", "test-room"),
-            (None, 999, "peer", "not-posted", "test-room"),
+        self.db.executemany("INSERT INTO chat_history VALUES(?,?,?,?,?,?)", [
+            ("900", 999, "peer", "wrong-room", "other-room", 0),
+            ("901", 999, "self", "outgoing", "test-room", 0),
+            ("902", 999, None, "no-sender", "test-room", 0),
+            (None, 999, "peer", "not-posted", "test-room", 0),
         ])
         self.assertEqual([int(r[3]) for r in self.selected(count=1)], [26])
 
     def test_equal_times_have_deterministic_numeric_id_order(self):
         self.db.execute("UPDATE chat_history SET created_time=999 WHERE content IN ('1','3')")
         self.assertEqual([int(r[0]) for r in self.selected(count=2)], [103, 101])
+
+    def test_selects_attachment_type_including_null(self):
+        self.db.executemany("INSERT INTO chat_history VALUES(?,?,?,?,?,?)", [
+            ("201", 2001, "peer", None, "test-room", 1),
+            ("202", 2002, "peer", None, "test-room", 2),
+            ("203", 2003, "peer", None, "test-room", 7),
+            ("204", 2004, "peer", None, "test-room", None),
+        ])
+        rows = self.selected(lower=200, count=4)
+        self.assertEqual([(r[0], r[3], r[4]) for r in rows], [
+            ("204", None, None),
+            ("203", None, 7),
+            ("202", None, 2),
+            ("201", None, 1),
+        ])
 
 
 if __name__ == "__main__":

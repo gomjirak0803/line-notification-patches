@@ -2,7 +2,7 @@
 
 Declared target: `jp.naver.line.android` / `26.16.0` / `261600106` (experimental). Even if Morphe Manager's version check is bypassed, `verifiedLineVersionPatch` re-validates package name, version name, and version code internally.
 
-Recent message lookup (`NativeLine.RECENT_MESSAGES_SQL`) selects the latest 25 unread messages ordered by `created_time DESC, CAST(server_id AS INTEGER) DESC`. Real Official Account batch tests (`0.1.8-dev`) showed that `server_id` order can differ from creation timestamp order within batched pushes; the read boundary comparison still follows LINE's native `server_id` boundary.
+Recent message lookup (`NativeLine.RECENT_MESSAGES_SQL`) selects the latest 25 unread messages (`server_id, created_time, from_mid, content, attachement_type`) ordered by `created_time DESC, CAST(server_id AS INTEGER) DESC`. Real Official Account batch tests (`0.1.8-dev`) showed that `server_id` order can differ from creation timestamp order within batched pushes; the read boundary comparison still follows LINE's native `server_id` boundary. When `content` is empty, `NotificationPolicy.attachmentPlaceholderKey`/`Fallback` maps `attachement_type` (`IMAGE`/`EXTIMAGE`, `VIDEO`, `STICKER`, `AUDIO`, `PDF`/`FILE`, `LOCATION`, `CONTACT`, `CALL`, `GIFT`, `MUSIC`, default `[Attachment]`).
 
 Because Android notification posting is asynchronous, a save/post event can complete before the final child notification finishes registering. In addition to immediate transform/refresh, `Notifications.deferRefresh` coalesces bursts per `(account, chat)` and runs one trailing active-notification refresh after 400ms on a background worker thread (`REFRESH_WORKER`). It never polls, writes native DBs, creates absent notifications, or makes network requests.
 
@@ -50,7 +50,7 @@ Both original `base.apk` files passed APK signature verification: lineage-root c
 | Post-read room notification cleanup | `a78.b` completion callback → `fw3.h.c(...)` with `fw3.l.a(chat)` and `fw3.l.c(chat)` |
 | Push registration (optional) | FIS `X-Android-Cert` / `URLConnection.addRequestProperty` |
 | Expanded notification sender avatars | 1:1 reuses original `largeIcon`/`sender_person`; group reads `contacts.picture_path` + LINE Glide local cache only (`e80.l0`, `ao.a.s(true)`=`onlyRetrieveFromCache(true)`, `kn.l.b`, `ao.a.d()`) |
-| Localized UI strings (`0.1.12+`) | `NotificationStrings.kt` writes 39 `line_notify_*` keys into LINE's `res/values/strings.xml` and 6 locale directories (`values-ko`, `values-ja`, `values-zh-rTW`, `values-zh-rCN`, `values-th`, `values-in`); the extension resolves them via `Strings.get(...)` using `getIdentifier`, falling back to English literals. Canonical patch names (`Not Too Much Silent`, `More Chat Info`, `No reply`, `Mark as read`) stay in English. |
+| Localized UI & attachment strings (`0.1.12+` / `0.1.13+`) | `NotificationStrings.kt` writes 49 `line_notify_*` keys into LINE's `res/values/strings.xml` and 6 locale directories (`values-ko`, `values-ja`, `values-zh-rTW`, `values-zh-rCN`, `values-th`, `values-in`); the extension resolves them via `Strings.get(...)` using `getIdentifier`, falling back to English literals. Canonical patch names (`Not Too Much Silent`, `More Chat Info`, `No reply`, `Mark as read`) stay in English. |
 
 ## Architecture highlights
 
