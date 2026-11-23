@@ -31,6 +31,12 @@ public final class NotificationPolicyTest {
         invalidMetadataFailsClearly();
         pushBeforeLocalPersistence();
         attachmentPlaceholderCases();
+        parameterAndMentionCases();
+        keywordCases();
+        chatListAttachmentCases();
+        messageCountCases();
+        mediaPreviewCases();
+        actionLayoutAndSnoozeCases();
         System.out.println("NotificationPolicy: " + assertions + " assertions passed");
     }
 
@@ -260,6 +266,287 @@ public final class NotificationPolicyTest {
                             NotificationPolicy.attachmentPlaceholderFallback(fallbackType)),
                     "Default attachment fallback for " + fallbackType);
         }
+    }
+
+    private static void parameterAndMentionCases() {
+        check("report.pdf".equals(NotificationPolicy.parameterValue("K1\t\tFILE_NAME\treport.pdf", "FILE_NAME")),
+                "Reads FILE_NAME after empty tab value");
+        check(NotificationPolicy.parameterValue("FILE_NAME\t\tOTHER\t1", "FILE_NAME") == null,
+                "Treats empty parameter value as null");
+        check(NotificationPolicy.parameterValue("NO_TABS", "FILE_NAME") == null,
+                "Handles parameter without tabs");
+
+        String directMention = "MENTION\t{\"MENTIONEES\":[{\"S\":\"0\",\"E\":\"4\",\"M\":\"u123\",\"A\":\"0\"}]}";
+        String secondMention = "MENTION\t{ \"MENTIONEES\" : [ {\"S\":\"0\",\"M\":\"u999\",\"EXTRA\":{\"M\":\"x\"}},"
+                + " {\"M\":\"u123\",\"A\":\"0\"} ] }";
+        String allMention = "K\tV\tMENTION\t{\"MENTIONEES\":[{\"S\":\"0\",\"E\":\"4\",\"A\":\"1\",\"NOTE\":\"\\\"hi\\\"\"}]}";
+        String escapedMention = "MENTION\t{\"MENTIONEES\":[{\"M\":\"u\\u003123\"}]}";
+        check(NotificationPolicy.isMentionedInParameter(directMention, "u123"), "Detects direct user mention");
+        check(!NotificationPolicy.isMentionedInParameter(directMention, "u999"), "Ignores non-matching mention MID");
+        check(NotificationPolicy.isMentionedInParameter(secondMention, "u123"), "Scans past first mention and nested objects");
+        check(!NotificationPolicy.isMentionedInParameter(secondMention, "x"), "Ignores M key inside nested sub-object");
+        check(NotificationPolicy.isMentionedInParameter(allMention, "u123"), "Detects @All (A=1) mention");
+        check(NotificationPolicy.isMentionedInParameter(escapedMention, "u123"), "Decodes \\uXXXX escape in mention MID");
+        check(!NotificationPolicy.isMentionedInParameter("MENTION\t{\"MENTIONEES\":[{\"M\":\"u123\"", "u123")
+                        || NotificationPolicy.isMentionedInParameter("MENTION\t{\"MENTIONEES\":[{\"M\":\"u123\"", "u123"),
+                "Truncated/malformed mention returns deterministic boolean without throwing");
+        check(!NotificationPolicy.isMentionedInParameter("MENTION\t{not json", "u123"), "Malformed JSON returns false safely");
+        check(!NotificationPolicy.isMentionedInParameter(null, "u123")
+                        && !NotificationPolicy.isMentionedInParameter(directMention, ""),
+                "Null/empty parameters or account return false");
+
+        check("Q4 Report.pdf".equals(NotificationPolicy.attachmentDetail(14, "FILE_NAME\t  Q4\n\u0007  Report.pdf  ", null, null)),
+                "FILE attachment extracts and sanitizes FILE_NAME");
+        check("Deck.pdf".equals(NotificationPolicy.attachmentDetail(5, "FILE_NAME\tDeck.pdf", null, null)),
+                "PDF attachment extracts FILE_NAME");
+        check("Gangnam Station".equals(NotificationPolicy.attachmentDetail(15, null, " Gangnam\nStation ", "Seoul")),
+                "LOCATION prefers sanitized location_name");
+        check("123 Teheran-ro".equals(NotificationPolicy.attachmentDetail(15, null, "   \n ", " 123\tTeheran-ro ")),
+                "LOCATION falls back to location_address when location_name blank");
+        check(NotificationPolicy.attachmentDetail(1, "FILE_NAME\ta.png", "Place", "Addr") == null
+                        && NotificationPolicy.attachmentDetail(7, "FILE_NAME\ts", "Place", "Addr") == null,
+                "Non-FILE/LOCATION attachments omit detail");
+        StringBuilder ninety = new StringBuilder();
+        for (int i = 0; i < 90; i++) ninety.append('a');
+        String capped = NotificationPolicy.attachmentDetail(14, "FILE_NAME\t" + ninety, null, null);
+        check(capped != null && capped.length() == 81 && capped.endsWith("\u2026"),
+                "Long detail is capped to 80 chars plus ellipsis");
+        check("[File] a.pdf".equals(NotificationPolicy.formatAttachmentPlaceholder("[File]", "a.pdf"))
+                        && "[File]".equals(NotificationPolicy.formatAttachmentPlaceholder("[File]", null)),
+                "Formats placeholder with or without detail");
+
+        check("[위치] 강남역".equals(NotificationPolicy.resolveMessageBody(
+                        "강남역", 15, "[위치]", null, "강남역", "서울")),
+                "LOCATION prefixes label even when LINE mirrors title in content");
+        check("[위치] 강남역".equals(NotificationPolicy.resolveMessageBody(
+                        "  강남역\n", 15, "[위치]", null, null, null)),
+                "LOCATION falls back to sanitized content when location columns null");
+        check("[파일] a.pdf".equals(NotificationPolicy.resolveMessageBody(
+                        null, 14, "[파일]", "FILE_NAME\ta.pdf", null, null)),
+                "FILE resolves filename when content empty");
+        check("[파일] a.pdf".equals(NotificationPolicy.resolveMessageBody(
+                        "a.pdf", 14, "[파일]", "FILE_NAME\ta.pdf", null, null)),
+                "FILE prefixes label when content mirrors FILE_NAME");
+        check("hello".equals(NotificationPolicy.resolveMessageBody(
+                        "hello", 0, "[첨부 메시지]", null, null, null)),
+                "NONE keeps normal text content unchanged");
+        check("[스티커]".equals(NotificationPolicy.resolveMessageBody(
+                        "", 7, "[스티커]", null, null, null)),
+                "STICKER resolves placeholder when content empty");
+    }
+
+    private static void keywordCases() {
+        check(NotificationPolicy.parseKeywords(null).isEmpty()
+                        && NotificationPolicy.parseKeywords(" , \r\n\uFF0C\u3001 ").isEmpty(),
+                "Empty or separator-only keyword input returns empty list");
+        List<String> parsed = NotificationPolicy.parseKeywords("  Urgent\r\n  deploy\u0007  alert , urgent\uFF0Cmeeting\u3001MEETING  ");
+        check(parsed.equals(Arrays.asList("Urgent", "deploy alert", "meeting")),
+                "Parses ASCII/CJK commas and newlines, cleans whitespace, and deduplicates case-insensitively");
+        check("Urgent\ndeploy alert\nmeeting".equals(NotificationPolicy.serializeKeywords(parsed)),
+                "Serializes keywords with newlines");
+        check("".equals(NotificationPolicy.serializeKeywords(Collections.<String>emptyList())),
+                "Serializing empty keywords yields empty string");
+        check("Urgent, de\u2026".equals(NotificationPolicy.formatKeywordsSummary(parsed, 10)),
+                "Truncates keyword summary with ellipsis");
+        check(NotificationPolicy.formatKeywordsSummary(Collections.<String>emptyList(), 10) == null,
+                "Empty keyword list produces null summary");
+
+        StringBuilder many = new StringBuilder();
+        for (int i = 1; i <= 60; i++) {
+            if (i > 1) many.append(',');
+            many.append("kw").append(i);
+        }
+        List<String> cappedCount = NotificationPolicy.parseKeywords(many.toString());
+        check(cappedCount.size() == NotificationPolicy.MAX_KEYWORDS
+                        && "kw50".equals(cappedCount.get(NotificationPolicy.MAX_KEYWORDS - 1)),
+                "Keyword count is capped at 50");
+
+        StringBuilder tooLong = new StringBuilder();
+        for (int i = 0; i < 63; i++) tooLong.append('a');
+        tooLong.append(" bcd");
+        List<String> cappedLen = NotificationPolicy.parseKeywords(tooLong.toString());
+        check(cappedLen.size() == 1 && cappedLen.get(0).length() == 63 && !cappedLen.get(0).endsWith(" "),
+                "Keyword length cap drops trailing space before exceeding max length without ellipsis");
+
+        String nfc = "\uAC00\uB098";
+        String nfd = "\u1100\u1161\u1102\u1161";
+        List<String> unicodeKeywords = NotificationPolicy.parseKeywords("Alert, " + nfd);
+        check(NotificationPolicy.matchesKeyword("SERVER ALERT!", unicodeKeywords),
+                "Matches keywords case-insensitively");
+        check(NotificationPolicy.matchesKeyword(nfc + " \uB2E4", unicodeKeywords),
+                "Matches NFC text against NFD-entered Hangul keyword");
+        check(!NotificationPolicy.matchesKeyword("normal update", unicodeKeywords),
+                "Does not match unrelated text");
+
+        List<String> fileAndPlace = NotificationPolicy.parseKeywords("Invoice, Teheran");
+        check(NotificationPolicy.matchesMessageKeywords("", 14, "FILE_NAME\tQ4_Invoice.pdf", null, null, fileAndPlace),
+                "Matches keyword in FILE attachment FILE_NAME metadata");
+        check(NotificationPolicy.matchesMessageKeywords("", 5, "FILE_NAME\tQ4_Invoice.pdf", null, null, fileAndPlace),
+                "Matches keyword in PDF attachment FILE_NAME metadata");
+        check(NotificationPolicy.matchesMessageKeywords("Here", 15, null, "Office", "123 Teheran-ro", fileAndPlace),
+                "Matches keyword in LOCATION address metadata");
+        check(!NotificationPolicy.matchesMessageKeywords("Invoice", 1, "FILE_NAME\tInvoice.png", "Teheran", null,
+                        NotificationPolicy.parseKeywords("Teheran")),
+                "Does not inspect LOCATION fields on non-LOCATION IMAGE attachment");
+    }
+
+    private static void chatListAttachmentCases() {
+        check(NotificationPolicy.effectiveChatListAttachmentType(1, 15) == 15
+                        && NotificationPolicy.effectiveChatListAttachmentType(1, 14) == 14
+                        && NotificationPolicy.effectiveChatListAttachmentType(5, 0) == 7
+                        && NotificationPolicy.effectiveChatListAttachmentType(1, 7) == 7,
+                "Maps MESSAGE/STICKER attachment rows to typed codes");
+        check(NotificationPolicy.effectiveChatListAttachmentType(1, 0) == 0
+                        && NotificationPolicy.effectiveChatListAttachmentType(1, 6) == 0
+                        && NotificationPolicy.effectiveChatListAttachmentType(17, 15) == 0
+                        && NotificationPolicy.effectiveChatListAttachmentType(2, 1) == 0,
+                "Excludes plain text, CALL, UNSENT, and JOIN/system rows");
+
+        check("[Location] Gangnam Station".equals(NotificationPolicy.resolveChatListMessage(
+                        "Alice sent a location.", 10000L, 1, 10000L,
+                        "Gangnam Station", 15, "[Location]", null, "Gangnam Station", "Seoul")),
+                "Replaces native chat-list location string with [Location] place");
+        check("[File] Q4.pdf".equals(NotificationPolicy.resolveChatListMessage(
+                        "Alice sent a file.", 10000L, 1, 10500L,
+                        "", 14, "[File]", "FILE_NAME\tQ4.pdf", null, null)),
+                "Replaces native chat-list file string within timestamp tolerance");
+        check("[Sticker]".equals(NotificationPolicy.resolveChatListMessage(
+                        "You sent a sticker.", 10000L, 5, 10000L,
+                        "", 0, "[Sticker]", null, null, null)),
+                "Replaces legacy STICKER row with [Sticker]");
+        check("Alice sent a location.".equals(NotificationPolicy.resolveChatListMessage(
+                        "Alice sent a location.", 20000L, 1, 10000L,
+                        "Old Place", 15, "[Location]", null, "Old Place", null)),
+                "Keeps native text when latest stored row timestamp lags behind native chat timestamp");
+        check("Missed call".equals(NotificationPolicy.resolveChatListMessage(
+                        "Missed call", 10000L, 1, 10000L,
+                        "", 6, "[Call]", null, null, null)),
+                "Preserves native call summary text");
+    }
+
+    private static void messageCountCases() {
+        check(NotificationPolicy.clampMessageCount(-5) == 1
+                        && NotificationPolicy.clampMessageCount(0) == 1
+                        && NotificationPolicy.clampMessageCount(1) == 1
+                        && NotificationPolicy.clampMessageCount(10) == 10
+                        && NotificationPolicy.clampMessageCount(25) == 25
+                        && NotificationPolicy.clampMessageCount(99) == 25,
+                "Clamps displayed message count between 1 and 25");
+        check(Settings.defaults().maxRecentMessages == 25
+                        && ALL.maxRecentMessages == 25,
+                "Default and 4-arg Settings retain up to 25 recent messages");
+
+        List<Message> unread = Arrays.asList(
+                message("m1", 1), message("m2", 2), message("m3", 3),
+                message("m4", 4), message("m5", 5), message("m6", 6));
+        Snapshot snap = new Snapshot(CHAT, false, true, 12, false, unread);
+
+        Decision three = NotificationPolicy.evaluate(new Settings(false, true, false, false, 3), snap, false);
+        check(ids(three).equals(Arrays.asList("m4", "m5", "m6")) && three.totalUnreadCount == 12,
+                "Custom count 3 retains newest 3 messages while preserving full unread count");
+
+        Decision one = NotificationPolicy.evaluate(new Settings(false, true, false, false, 0), snap, false);
+        check(ids(one).equals(Arrays.asList("m6")) && one.totalUnreadCount == 12,
+                "Clamped count 0 shows newest 1 message while preserving full unread count");
+    }
+
+    private static void mediaPreviewCases() {
+        for (int supported : new int[]{1, 21, 2, 7}) {
+            check(NotificationPolicy.isPreviewableMediaType(supported),
+                    "Media preview accepts attachment type " + supported);
+        }
+        for (int unsupported : new int[]{0, 3, 5, 6, 9, 13, 14, 15, 19, -1}) {
+            check(!NotificationPolicy.isPreviewableMediaType(unsupported),
+                    "Media preview excludes attachment type " + unsupported);
+        }
+
+        check(Arrays.equals(NotificationPolicy.parseStickerIds(
+                        "STKPKGID\t446\tSTKVER\t14\tSTKID\t1988"),
+                new long[]{446L, 14L, 1988L}),
+                "Parses LINE DB wire sticker keys");
+        check(Arrays.equals(NotificationPolicy.parseStickerIds(
+                        "stickerPackageId\t789\tstickerPackageVer\t2\tstickerId\t555"),
+                new long[]{789L, 2L, 555L}),
+                "Parses legacy camelCase sticker keys");
+        check(Arrays.equals(NotificationPolicy.parseStickerIds(
+                        "STICKER_PACKAGE_ID\t446\tSTICKER_PACKAGE_VER\t100\tSTICKER_ID\t1988"),
+                new long[]{446L, 100L, 1988L}),
+                "Parses standard sticker package, version, and sticker IDs");
+        check(Arrays.equals(NotificationPolicy.parseStickerIds(
+                        "STICKER_PACKAGE_ID_OLD\t789\tSTICKER_PACKAGE_VER_OLD\t3\tSTICKER_ID_OLD\t12345"),
+                new long[]{789L, 3L, 12345L}),
+                "Parses legacy _OLD sticker keys");
+        check(Arrays.equals(NotificationPolicy.parseStickerIds(
+                        "STICKER_PACKAGE_ID\t 446 \tstickerId\t 1988 "),
+                new long[]{446L, 1L, 1988L}),
+                "Falls back to stickerId and defaults missing package version to 1");
+        check(Arrays.equals(NotificationPolicy.parseStickerIds(
+                        "STICKER_PACKAGE_ID\t446\tSTICKER_PACKAGE_VER\t0\tSTICKER_ID\t1988"),
+                new long[]{446L, 1L, 1988L}),
+                "Defaults non-positive sticker package version to 1");
+        check(NotificationPolicy.parseStickerIds(null) == null
+                        && NotificationPolicy.parseStickerIds("") == null
+                        && NotificationPolicy.parseStickerIds("STICKER_PACKAGE_ID\t446") == null
+                        && NotificationPolicy.parseStickerIds("STICKER_PACKAGE_ID\t0\tSTICKER_ID\t1988") == null
+                        && NotificationPolicy.parseStickerIds("STICKER_PACKAGE_ID\tabc\tSTICKER_ID\t1988") == null,
+                "Rejects missing, zero, or non-numeric sticker metadata");
+    }
+
+    private static void actionLayoutAndSnoozeCases() {
+        check(NotificationPolicy.ACTION_LAYOUT_DEFAULT.equals(NotificationPolicy.normalizeActionLayout(null))
+                        && NotificationPolicy.ACTION_LAYOUT_DEFAULT.equals(NotificationPolicy.normalizeActionLayout(""))
+                        && NotificationPolicy.ACTION_LAYOUT_DEFAULT.equals(NotificationPolicy.normalizeActionLayout("bogus"))
+                        && NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE_REPLY.equals(
+                                NotificationPolicy.normalizeActionLayout(NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE_REPLY)),
+                "Normalizes known action layout IDs and falls back to default");
+
+        check(NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE_REPLY)
+                        && NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_READ_MUTE_REPLY)
+                        && NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_READ_REPLY)
+                        && NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE)
+                        && NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_READ_ONLY),
+                "Identifies presets requiring Mark as read");
+        check(!NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_DEFAULT)
+                        && !NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_SNOOZE_REPLY)
+                        && !NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_REPLY_ONLY)
+                        && !NotificationPolicy.actionLayoutUsesRead(NotificationPolicy.ACTION_LAYOUT_NONE),
+                "Excludes non-Read presets from readActionUsesRead");
+
+        check(NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_DEFAULT, false, true)
+                        .equals(Arrays.asList(NotificationPolicy.ActionSlot.MUTE, NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_DEFAULT, true, true)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.READ, NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_DEFAULT, true, false)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.MUTE, NotificationPolicy.ActionSlot.REPLY)),
+                "Default layout follows Mark as read switch and patch availability");
+
+        check(NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE_REPLY, false, true)
+                        .equals(Arrays.asList(NotificationPolicy.ActionSlot.READ,
+                                NotificationPolicy.ActionSlot.SNOOZE_1H, NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE_REPLY, false, false)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.SNOOZE_1H, NotificationPolicy.ActionSlot.REPLY)),
+                "Read + Quiet 1h + Reply orders slots and omits Read when Mark as read is not included");
+
+        check(NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_READ_MUTE_REPLY, false, true)
+                        .equals(Arrays.asList(NotificationPolicy.ActionSlot.READ,
+                                NotificationPolicy.ActionSlot.MUTE, NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_READ_REPLY, false, true)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.READ, NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_SNOOZE_REPLY, false, false)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.SNOOZE_1H, NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_READ_SNOOZE, false, true)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.READ, NotificationPolicy.ActionSlot.SNOOZE_1H))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_READ_ONLY, false, true)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.READ))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_REPLY_ONLY, true, true)
+                                .equals(Arrays.asList(NotificationPolicy.ActionSlot.REPLY))
+                        && NotificationPolicy.resolveActionSlots(NotificationPolicy.ACTION_LAYOUT_NONE, true, true).isEmpty(),
+                "Resolves all remaining custom notification button presets accurately");
+
+        check(!NotificationPolicy.isSnoozeActive(0L, 1000L)
+                        && !NotificationPolicy.isSnoozeActive(1000L, 1000L)
+                        && NotificationPolicy.isSnoozeActive(1001L, 1000L),
+                "Checks temporary snooze deadline exclusivity");
     }
 
     private static Snapshot snapshot(boolean muted) {

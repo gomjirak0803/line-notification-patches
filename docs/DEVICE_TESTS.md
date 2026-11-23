@@ -1,5 +1,24 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.1.14-dev` Notification controls expansion — 2026-11-23
+
+Added opt-in `@mention` (`@you`/`@All`) and keyword alert bypasses (up to 50 NFC case-insensitive keywords across text, `FILE_NAME`, and location metadata), detailed `[File] <filename>` & `[Location] <place>` labels across notifications/popups/chat list (`tickerText`, `HOLD_PENDING` pre-save buffer, `Lf22/i;`), configurable displayed message count (`1–25`), opt-in photo/video/sticker thumbnail previews via `LineCommonFileProvider` + `MessagingStyle.Message.setData`, and configurable notification button presets (`notification_action_layout`) with local 1-hour room snooze (`SnoozeActions`).
+
+* **Automated checks**: 209 `NotificationPolicy` assertions, 24 Python unit tests (including 7 `test_message_history.py` SQL regression tests and `test_i18n_resources.py` covering 7 qualifiers × 77 `line_notify_*` keys), 1,940 static APK contracts (ARM64), 1,940 (Universal), 1,878 (`Mark as read`-only).
+* **Compiled resource check** (`aapt2 dump resources`, ARM64 and Universal validation APKs): 77 `string/line_notify_*` keys, 0 missing locales across `default`, `ko`, `ja`, `zh-rTW`, `zh-rCN`, `th`, `in`.
+* **SHA-256**: final release bundle `9238891cbaee2ca1a27045c1d73e115804ae539f73a3469fde2ee349d36441aa`, unsigned ARM64 APK `bebfa48c7a44646e843b2927ba421bd480b59641efcbc015421b2ba934898d95`, S10e-tested signed APK `89ca5772b6f41d82a1be78a7e4e2e375299c5021e7c87213ec4ef521b12fb92d` *(built from identical functional code `d84d04fda16a…` immediately prior to trimming the `PushPatch.kt` description string)*.
+
+### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1) verification (`C1dbd577f70e05152968a4580746934b0` test room only)
+| Feature / Case | Result |
+| --- | --- |
+| Same-key updates & stability | All incremental `adb install -r` updates succeeded with data preserved and device `base.apk` SHA-256 matching signed test APKs (`89ca5772…` final test build); 0 `AndroidRuntime:E` / `SecurityException` crashes |
+| `@mention` bypass (`silent_mention_bypass`) | Quiet room baseline (`short` → `silent.v1`), direct `@mention` & `@All` → `jp.naver.line.android.notification.NewMessages` (`importance=4`), follow-up `short` → `silent.v1` |
+| Detailed `[File]` / `[Location]` popup & chat list | Pre-save push held (`post: held awaiting local save` → 326ms → `post: flushed after local save`), initial popup & chat list showed `[위치] 강남역 팝업 확인`; visually confirmed on device |
+| Keyword bypass (`silent_keyword_bypass`) | Non-matching → `silent.v1`; `긴급`, English case-insensitive `URGENT`, and post-save `[위치] 긴급 집합 장소` escalated to `NewMessages`; follow-up `short` → `silent.v1` |
+| Displayed message count (`more_chat_info_max_messages`) | With `3개` selected and 5 unread sent, notification retained `test  [5]: shubul` title while showing newest 3 messages (`3/5`..`5/5`) |
+| Inline photo & sticker previews (`more_chat_info_media_preview`) | Live sticker + image burst resolved `m_...png` (`image/png`) and `m_...jpg` (`image/jpeg`) via `LineCommonFileProvider` in `MessagingStyle` (`media: previews attached`), 0 permission errors |
+| Configurable notification buttons & 1h snooze (`notification_action_layout`) | `읽음 · 1시간 조용히 · 답장` (`actions=3`) verified on `NewMessages` (`importance=4`); tapping `1시간 조용히` cleared active notifications (`0` remaining) and routed subsequent message to `silent.v1` (`importance=2`, `silent: snoozed 1h`) |
+
 ## `0.1.13-dev` Typed attachment placeholders in `More Chat Info` — 2026-11-23
 
 Added `attachement_type` lookup to `NativeLine.RECENT_MESSAGES_SQL` and mapped LINE's `ContentType` ordinals in `NotificationPolicy.attachmentPlaceholderKey`/`Fallback` across all 7 supported locales (`[Photo]`, `[Video]`, `[Sticker]`, `[Voice message]`, `[File]`, `[Location]`, `[Contact]`, `[Call]`, `[Gift]`, `[Music]`, with `[Attachment]` fallback).

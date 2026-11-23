@@ -88,6 +88,7 @@ final class ChatNotifications {
                     trace(success ? "setting: completed" : "setting: failed");
                     try {
                         if (!account.equals(NativeLine.account())) return;
+                        if (success) Settings.clearSnooze(account, chat);
                         if (!success) toast(context, Strings.get(context, "line_notify_toast_change_failed",
                                 "Could not update notification setting. Please try again."));
                         else if (nativeCallback != null) {
