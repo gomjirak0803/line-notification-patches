@@ -1,5 +1,12 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.1.15-dev` All 6 patches enabled by default — 2026-11-23
+
+All 6 patches now ship with `default = true` (Morphe Manager no longer requires Expert mode to apply the full suite; every in-app switch in **Notification patch settings** still defaults to OFF), and English documentation and release notes were cleaned of legacy `in Korean` annotations. Runtime extension DEX behavior is unchanged from S10e-verified `0.1.14-dev`.
+
+* **Automated checks**: 209 `NotificationPolicy` assertions, 24 Python unit tests, 1,940 static APK contracts (ARM64), 1,940 (Universal), 1,878 (`Mark as read`-only); `morphe-desktop list-patches` verified `Enabled: true` on all 6 patches (`Index 0..5`).
+* **Local bundle SHA-256**: `a34d8102b3e08a415d79026dc167705c01df6f5f01b51e39151c699d54220c3a` (`line-notification-patches-0.1.15-dev.mpp`).
+
 ## `0.1.14-dev` Notification controls expansion — 2026-11-23
 
 Added opt-in `@mention` (`@you`/`@All`) and keyword alert bypasses (up to 50 NFC case-insensitive keywords across text, `FILE_NAME`, and location metadata), detailed `[File] <filename>` & `[Location] <place>` labels across notifications/popups/chat list (`tickerText`, `HOLD_PENDING` pre-save buffer, `Lf22/i;`), configurable displayed message count (`1–25`), opt-in photo/video/sticker thumbnail previews via `LineCommonFileProvider` + `MessagingStyle.Message.setData`, and configurable notification button presets (`notification_action_layout`) with local 1-hour room snooze (`SnoozeActions`).

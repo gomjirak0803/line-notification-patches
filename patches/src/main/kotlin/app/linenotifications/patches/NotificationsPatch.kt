@@ -198,7 +198,7 @@ private val notificationIntegrationPatch = bytecodePatch {
 val noReplyPatch = bytecodePatch(
     name = "No reply",
     description = "Hides suggested replies while keeping manual inline reply. Enable in LINE notification patch settings.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
     dependsOn(notificationIntegrationPatch)
@@ -209,7 +209,7 @@ val noReplyPatch = bytecodePatch(
 val markAsReadPatch = bytecodePatch(
     name = "Mark as read",
     description = "Replaces mute with a button that marks the whole chat as read and clears its notification using LINE's native chat-list path. Enable in LINE settings.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
     dependsOn(notificationIntegrationPatch, nativeReadActionResourcesPatch)
@@ -285,7 +285,7 @@ private fun BytecodePatchContext.requireMediaPreviewBindings() {
 val moreChatInfoPatch = bytecodePatch(
     name = "More Chat Info",
     description = "Shows configurable recent unread messages (1–25) in conversation style with total unread count, sender profile avatars (local cache only), optional inline photo/video/sticker thumbnail previews (loaded via LINE's image loader when enabled), and typed attachment labels ([Photo], [Video], [Sticker], [File] filename, [Location] place) across notifications, popups, and the chat list. Enable in LINE settings.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
     dependsOn(notificationIntegrationPatch)
@@ -320,7 +320,7 @@ val moreChatInfoPatch = bytecodePatch(
 val notTooMuchSilentPatch = bytecodePatch(
     name = "Not Too Much Silent",
     description = "Turns chat-menu, chat-list, and notification mute into local silent mode with optional @mention and keyword alert bypass; adds a completely-hidden chat menu option.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
     dependsOn(notificationIntegrationPatch)
