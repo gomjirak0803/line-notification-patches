@@ -1,16 +1,25 @@
 # Publication Status — 2026-11-23
 
-## Latest release (`v0.1.13-dev`)
+## Latest release (`v0.1.14-dev`)
 
 * **Repository**: https://github.com/gomjirak0803/line-notification-patches
-* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.13-dev
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.14-dev
 * **Add in Morphe Manager**: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45126406640 (success)
-* **Source commit**: `45aafdb` (metadata commit: `885ab30`)
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45176712044 (success)
+* **Source commit**: `d52cf9b` (metadata commit: `661ed16`)
 
-The published `line-notification-patches-0.1.13-dev.mpp` is `153,623` bytes with SHA-256 `a1a9e4111f23a0f3991af17cc90658be99f02b77e4718e8d2e380b8a6dbfbddf`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 18 ZIP entries against the local build (`6bd69dc56b516d282f394492848af2b4aac7ea8c32c5c23bc865978805eaeb7d`, the bundle used for the S10e-tested APK) confirmed byte-for-byte parity across every executable class, DEX, extension, resource, and manifest entry (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The source archive SHA-256 is `b5a7cf94ddd5cc6544bc1b6d7ec75d0bdb3aff54cf282ffa58d90ded5cbb62a6`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-23T06:47:33"` and `"version": "0.1.13-dev"`, passing all 19 Python tests (including `tests/test_bundle_metadata.py`).
+The published `line-notification-patches-0.1.14-dev.mpp` is `188,826` bytes with SHA-256 `af28222772b6554ecff45ca09e1778b407d9a86d8475608264cd7aa6b1d48ece`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 18 ZIP entries against the local build (`9238891cbaee2ca1a27045c1d73e115804ae539f73a3469fde2ee349d36441aa`) confirmed byte-for-byte parity across every executable class, DEX, extension, resource, and manifest entry (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The source archive SHA-256 is `f5c97b5baa60c41aec74945e680155beeff12a755fe8c1ce65f3037f7825de65`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-23T12:42:36"` and `"version": "0.1.14-dev"`, passing all 24 Python tests (including `tests/test_bundle_metadata.py`).
 
 ## Previous releases
+
+### `v0.1.13-dev` (2026-11-23)
+
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.13-dev
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45126406640 (success)
+* **Source commit**: `45aafdb` (metadata commit: `885ab30`)
+* **Published MPP** (`153,623` bytes): `a1a9e4111f23a0f3991af17cc90658be99f02b77e4718e8d2e380b8a6dbfbddf` (ZIP entry parity across all 18 entries with local build `6bd69dc56b516d282f394492848af2b4aac7ea8c32c5c23bc865978805eaeb7d`, differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings).
+* **Source ZIP SHA-256**: `b5a7cf94ddd5cc6544bc1b6d7ec75d0bdb3aff54cf282ffa58d90ded5cbb62a6`.
+* `main/patches-bundle.json`: `"created_at": "2026-11-23T06:47:33"`, `"version": "0.1.13-dev"`.
 
 ### `v0.1.12-dev` (2026-11-23)
 
