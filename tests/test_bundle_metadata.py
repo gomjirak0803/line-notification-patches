@@ -25,6 +25,14 @@ class BundleMetadataTest(unittest.TestCase):
         self.assertEqual(bundle["version"], listing["version"])
         self.assertEqual(len(listing["patches"]), 6)
 
+    def test_bundle_description_matches_release_notes(self):
+        bundle = json.loads((ROOT / "patches-bundle.json").read_text(encoding="utf-8"))
+        notes = (ROOT / "docs/RELEASE_NOTES.md").read_text(encoding="utf-8").strip()
+        self.assertEqual(bundle["description"], notes)
+        self.assertIn(bundle["version"], bundle["description"])
+        source = (ROOT / "scripts/prepare_release.py").read_text(encoding="utf-8")
+        self.assertIn("docs/RELEASE_NOTES.md", source)
+
 
 if __name__ == "__main__":
     unittest.main()

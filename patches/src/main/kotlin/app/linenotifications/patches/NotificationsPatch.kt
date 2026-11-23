@@ -250,7 +250,7 @@ private fun BytecodePatchContext.requireAvatarCacheBindings() {
 @Suppress("unused")
 val moreChatInfoPatch = bytecodePatch(
     name = "More Chat Info",
-    description = "Shows unread messages with Android's conversation template and the native total unread count. Enable in LINE settings.",
+    description = "Shows up to 25 unread messages in conversation style with total unread count, sender profile avatars (local cache only), and typed attachment labels ([Photo], [Video], [Sticker], etc.). Enable in LINE settings.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
@@ -264,7 +264,7 @@ val moreChatInfoPatch = bytecodePatch(
 @Suppress("unused")
 val notTooMuchSilentPatch = bytecodePatch(
     name = "Not Too Much Silent",
-    description = "Shows muted regular chats silently; adds a completely-hidden chat menu option. Delivery still depends on LINE receiving the message.",
+    description = "Turns chat-menu, chat-list, and notification mute into local silent mode; adds a completely-hidden chat menu option. Delivery still depends on LINE receiving the message.",
     default = false,
 ) {
     compatibleWith(COMPATIBILITY_LINE)
