@@ -622,6 +622,13 @@ public final class NotificationPolicyTest {
                         && !NotificationPolicy.slotGenerationMatches(0L, 1L),
                 "Requires positive matching generation to commit a held notification slot");
 
+        check(NotificationPolicy.remainingHoldMillis(2200L, 1500L, 1200L) == 700L
+                        && NotificationPolicy.remainingHoldMillis(5000L, 1500L, 1200L) == 1200L
+                        && NotificationPolicy.remainingHoldMillis(1500L, 1500L, 1200L) == 0L
+                        && NotificationPolicy.remainingHoldMillis(1400L, 1500L, 1200L) == 0L
+                        && NotificationPolicy.remainingHoldMillis(-100L, -500L, 1200L) == 400L,
+                "Computes bounded non-negative remaining hold duration from monotonic timestamps");
+
         check(NotificationPolicy.snapshotConsistent(5, "100", 5, "100")
                         && !NotificationPolicy.snapshotConsistent(5, "100", 2, "103")
                         && !NotificationPolicy.snapshotConsistent(5, "100", 2, "100")

@@ -797,6 +797,13 @@ public final class NotificationPolicy {
         return expectedGeneration > 0L && expectedGeneration == currentGeneration;
     }
 
+    /** Returns remaining hold duration in ms (0 when expired; bounded by maxHoldMillis). */
+    public static long remainingHoldMillis(long deadlineMillis, long nowMillis, long maxHoldMillis) {
+        long remaining = deadlineMillis - nowMillis;
+        if (remaining <= 0L) return 0L;
+        return maxHoldMillis > 0L ? Math.min(remaining, maxHoldMillis) : remaining;
+    }
+
     /** Returns true only when unread count and read boundary remain unchanged after loading. */
     public static boolean snapshotConsistent(int beforeUnread, String beforeReadUp,
                                                int afterUnread, String afterReadUp) {

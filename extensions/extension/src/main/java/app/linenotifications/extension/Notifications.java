@@ -36,6 +36,9 @@ public final class Notifications {
     private static final String MESSAGE_TAG = "NOTIFICATION_TAG_MESSAGE";
     private static final String DEBUG_TAG = "LineNotifyPatch";
     private static final long PENDING_HOLD_MS = 1200L;
+    private static final int POST_FRESH = 0;
+    private static final int POST_FLUSH_IF_READY = 1;
+    private static final int POST_FLUSH_FORCE = 2;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final ExecutorService REFRESH_WORKER = Executors.newSingleThreadExecutor();
     private static final Map<NotificationPolicy.ChatKey, Runnable> DEFERRED = new HashMap<>();
@@ -44,6 +47,10 @@ public final class Notifications {
     private static final Map<SlotKey, Long> SLOT_GENERATIONS = new HashMap<>();
     private static long nextSlotGeneration = 0L;
     private Notifications() {}
+
+    private static long monotonicNowMillis() {
+        return System.nanoTime() / 1_000_000L;
+    }
 
     private static final class SlotKey {
         final String tag;
@@ -72,15 +79,17 @@ public final class Notifications {
         final int id;
         final Notification original;
         final long slotGeneration;
+        final long deadlineMillis;
 
         PendingPost(String account, NotificationManager manager, String tag, int id,
-                    Notification original, long slotGeneration) {
+                    Notification original, long slotGeneration, long deadlineMillis) {
             this.account = account;
             this.manager = manager;
             this.tag = tag;
             this.id = id;
             this.original = original;
             this.slotGeneration = slotGeneration;
+            this.deadlineMillis = deadlineMillis;
         }
 
         boolean sameSlot(String otherTag, int otherId) {
@@ -138,32 +147,41 @@ public final class Notifications {
         return current != null && NotificationPolicy.slotGenerationMatches(expectedGen, current);
     }
 
-    public static synchronized void post(NotificationManager manager, String tag, int id, Notification original) {
-        postInternal(manager, tag, id, original, true, null, 0L);
+    private static boolean hasPendingSlotLocked(String tag, int id) {
+        for (List<PendingPost> list : PENDING_POSTS.values()) {
+            for (PendingPost item : list) {
+                if (item.sameSlot(tag, id)) return true;
+            }
+        }
+        return false;
     }
 
-    private static void postInternal(NotificationManager manager, String tag, int id,
-                                     Notification original, boolean allowHold,
-                                     String expectedAccount, long expectedSlotGen) {
-        if (original == null) return;
+    public static synchronized void post(NotificationManager manager, String tag, int id, Notification original) {
+        postInternal(manager, tag, id, original, POST_FRESH, null, 0L);
+    }
+
+    private static boolean postInternal(NotificationManager manager, String tag, int id,
+                                        Notification original, int postMode,
+                                        String expectedAccount, long expectedSlotGen) {
+        if (original == null) return true;
         long currentSlotGen;
-        if (allowHold) {
+        if (postMode == POST_FRESH) {
             currentSlotGen = advanceSlotGenerationLocked(tag, id);
             removePendingSlotLocked(tag, id);
         } else {
             currentSlotGen = expectedSlotGen;
             if (!isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
                 trace("post: pending dropped on newer slot post");
-                return;
+                return true;
             }
             try {
                 if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())) {
                     trace("post: pending dropped on account change");
-                    return;
+                    return true;
                 }
             } catch (ReflectiveOperationException | RuntimeException ignored) {
                 trace("post: pending dropped without active account");
-                return;
+                return true;
             }
         }
         String chat = original.extras == null ? null : original.extras.getString("line.chat.id");
@@ -178,15 +196,14 @@ public final class Notifications {
             }
         }
         if (notification == null) {
-            if (!allowHold && !isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
+            if (postMode != POST_FRESH && !isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
                 trace("post: pending cancel superseded");
-                return;
+                return true;
             }
-            if (expectedAccount != null) clearPendingChatLocked(expectedAccount, chat);
-            else removePendingSlotLocked(tag, id);
+            removePendingSlotLocked(tag, id);
             trace("post: suppressed");
             manager.cancel(tag, id);
-            return;
+            return true;
         }
         boolean holdPending = false;
         if (notification.extras != null) {
@@ -195,36 +212,55 @@ public final class Notifications {
             notification.extras.remove(ESCALATE_ALERT);
         }
         String stampedAccount = notification.extras == null ? null : notification.extras.getString(ACCOUNT);
-        if (allowHold && holdPending && isMessage(original) && NativeLine.regularChat(chat)) {
+        if (postMode == POST_FRESH && holdPending && isMessage(original) && NativeLine.regularChat(chat)) {
             if (stampedAccount != null && !stampedAccount.isEmpty()) {
                 purgeForeignPendingLocked(stampedAccount);
                 queuePending(new NotificationPolicy.ChatKey(stampedAccount, chat),
-                        manager, tag, id, original, currentSlotGen);
+                        manager, tag, id, original, currentSlotGen, monotonicNowMillis() + PENDING_HOLD_MS);
                 trace("post: held awaiting local save");
             } else {
                 trace("post: pending dropped without active account");
             }
-            return;
+            return true;
         }
-        if (!allowHold) {
+        if (postMode == POST_FLUSH_IF_READY && holdPending && isMessage(original) && NativeLine.regularChat(chat)) {
+            if (!isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
+                trace("post: pending dropped on newer slot post");
+                return true;
+            }
+            try {
+                if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())
+                        || !NotificationPolicy.sameAccount(expectedAccount, stampedAccount)) {
+                    trace("post: pending dropped on account change");
+                    return true;
+                }
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                trace("post: pending dropped without active account");
+                return true;
+            }
+            trace("post: still awaiting local save");
+            return false;
+        }
+        if (postMode != POST_FRESH) {
             if (!isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
                 trace("post: pending notify superseded");
-                return;
+                return true;
             }
             try {
                 if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())
                         || (stampedAccount != null && !expectedAccount.equals(stampedAccount))) {
                     trace("post: pending dropped on account change");
-                    return;
+                    return true;
                 }
             } catch (ReflectiveOperationException | RuntimeException ignored) {
                 trace("post: pending dropped without active account");
-                return;
+                return true;
             }
         }
         manager.notify(tag, id, notification);
         trace("post: delivered to Android");
         if (isMessage(notification)) deferRefresh(notification.extras.getString("line.chat.id"));
+        return true;
     }
 
     private static void removePendingSlotLocked(String tag, int id) {
@@ -269,7 +305,8 @@ public final class Notifications {
     }
 
     private static void queuePending(NotificationPolicy.ChatKey key, NotificationManager manager,
-                                     String tag, int id, Notification original, long slotGeneration) {
+                                     String tag, int id, Notification original, long slotGeneration,
+                                     long deadlineMillis) {
         List<PendingPost> list = PENDING_POSTS.get(key);
         if (list == null) {
             list = new ArrayList<>();
@@ -281,22 +318,26 @@ public final class Notifications {
                 break;
             }
         }
-        list.add(new PendingPost(key.accountId, manager, tag, id, original, slotGeneration));
+        list.add(new PendingPost(key.accountId, manager, tag, id, original, slotGeneration, deadlineMillis));
         if (!PENDING_TIMEOUTS.containsKey(key)) {
-            Runnable timeout = new Runnable() {
-                @Override public void run() {
-                    REFRESH_WORKER.execute(() -> {
-                        synchronized (Notifications.class) {
-                            if (PENDING_TIMEOUTS.get(key) != this) return;
-                            PENDING_TIMEOUTS.remove(key);
-                            flushPendingLocked(key, true);
-                        }
-                    });
-                }
-            };
-            PENDING_TIMEOUTS.put(key, timeout);
-            MAIN.postDelayed(timeout, PENDING_HOLD_MS);
+            schedulePendingTimeoutLocked(key, PENDING_HOLD_MS);
         }
+    }
+
+    private static void schedulePendingTimeoutLocked(NotificationPolicy.ChatKey key, long delayMillis) {
+        Runnable timeout = new Runnable() {
+            @Override public void run() {
+                REFRESH_WORKER.execute(() -> {
+                    synchronized (Notifications.class) {
+                        if (PENDING_TIMEOUTS.get(key) != this) return;
+                        PENDING_TIMEOUTS.remove(key);
+                        flushPendingLocked(key, true);
+                    }
+                });
+            }
+        };
+        PENDING_TIMEOUTS.put(key, timeout);
+        MAIN.postDelayed(timeout, Math.max(1L, delayMillis));
     }
 
     private static void flushPendingLocked(NotificationPolicy.ChatKey key, boolean timedOut) {
@@ -315,13 +356,33 @@ public final class Notifications {
             trace("post: pending dropped on account change");
             return;
         }
-        trace(timedOut ? "post: pending timeout flushed" : "post: flushed after local save");
+        List<PendingPost> remaining = null;
+        long earliestDeadline = Long.MAX_VALUE;
         for (PendingPost item : list) {
             if (NotificationPolicy.sameAccount(item.account, currentAccount)
                     && isCurrentSlotGenerationLocked(item.tag, item.id, item.slotGeneration)) {
-                postInternal(item.manager, item.tag, item.id, item.original, false,
+                long left = NotificationPolicy.remainingHoldMillis(
+                        item.deadlineMillis, monotonicNowMillis(), PENDING_HOLD_MS);
+                int mode = (timedOut || left <= 0L) ? POST_FLUSH_FORCE : POST_FLUSH_IF_READY;
+                boolean handled = postInternal(item.manager, item.tag, item.id, item.original, mode,
                         item.account, item.slotGeneration);
+                if (!handled) {
+                    if (remaining == null) remaining = new ArrayList<>();
+                    remaining.add(item);
+                    if (item.deadlineMillis < earliestDeadline) {
+                        earliestDeadline = item.deadlineMillis;
+                    }
+                }
             }
+        }
+        if (remaining != null && !remaining.isEmpty()) {
+            PENDING_POSTS.put(key, remaining);
+            long delay = NotificationPolicy.remainingHoldMillis(
+                    earliestDeadline, monotonicNowMillis(), PENDING_HOLD_MS);
+            schedulePendingTimeoutLocked(key, Math.max(1L, delay));
+            trace("post: pending retained after unrelated save");
+        } else {
+            trace(timedOut ? "post: pending timeout flushed" : "post: flushed after local save");
         }
     }
 
@@ -339,9 +400,11 @@ public final class Notifications {
         if (!NativeLine.regularChat(chat)) return;
         try {
             String account = NativeLine.account();
+            NativeLine.invalidateChatListPreviewCache(account, chat);
             purgeForeignPendingLocked(account);
             flushPendingLocked(new NotificationPolicy.ChatKey(account, chat), false);
         } catch (ReflectiveOperationException | RuntimeException ignored) {
+            NativeLine.invalidateChatListPreviewCache(null, chat);
             trace("local save: pending flush skipped without active account");
         }
         if (!needsPostSaveRefresh()) return;
@@ -407,6 +470,10 @@ public final class Notifications {
                         || !account.equals(original.extras.getString(ACCOUNT))) continue;
                 String activeChat = original.extras.getString("line.chat.id");
                 if (!NativeLine.regularChat(activeChat) || original.extras.getBoolean("line.square.notification")) continue;
+                if (hasPendingSlotLocked(active.getTag(), active.getId())) {
+                    trace("local save: refresh skipped for pending slot");
+                    continue;
+                }
                 boolean onlyActions = actionsOnly
                         || (!silentBypassActive() && (!Settings.enabled(Settings.INFO) || !NativeLine.previewsAllowed()));
                 Notification updated;
@@ -427,7 +494,8 @@ public final class Notifications {
                         break;
                     }
                 }
-                if (!stillActive || !account.equals(NativeLine.account())) continue;
+                if (!stillActive || !account.equals(NativeLine.account())
+                        || hasPendingSlotLocked(active.getTag(), active.getId())) continue;
                 if (updated != null && !NativeLine.previewsAllowed()) {
                     // An action refresh must not republish a preview after privacy was disabled.
                     String newMessage = Strings.get("line_notify_new_message", "You have a new message.");
@@ -439,7 +507,6 @@ public final class Notifications {
                 }
                 if (updated == null) {
                     advanceSlotGenerationLocked(active.getTag(), active.getId());
-                    removePendingSlotLocked(active.getTag(), active.getId());
                     manager.cancel(active.getTag(), active.getId());
                 } else {
                     boolean escalate = updated.extras != null && updated.extras.getBoolean(ESCALATE_ALERT, false);
@@ -453,7 +520,6 @@ public final class Notifications {
                         updated.flags |= Notification.FLAG_ONLY_ALERT_ONCE;
                     }
                     advanceSlotGenerationLocked(active.getTag(), active.getId());
-                    removePendingSlotLocked(active.getTag(), active.getId());
                     manager.notify(active.getTag(), active.getId(), updated);
                 }
                 trace("local save: active notification refreshed");
@@ -494,7 +560,8 @@ public final class Notifications {
         // Stamp the account even while READ is off so a later switch cannot adopt another
         // account's existing notification. No content or action change is needed in that case.
         if (!settings.notTooMuchSilent && !settings.moreChatInfo && !settings.noReply
-                && !Settings.readIncluded() && !Settings.hasCustomActions() && !Settings.hasAnySnooze()) return original;
+                && !Settings.silentIncluded() && !Settings.readIncluded()
+                && !Settings.hasCustomActions() && !Settings.hasAnySnooze()) return original;
         String chat = original.extras.getString("line.chat.id");
         if (!NativeLine.regularChat(chat) || original.extras.getBoolean("line.square.notification")) return original;
         boolean summary = (original.flags & Notification.FLAG_GROUP_SUMMARY) != 0;
@@ -682,6 +749,21 @@ public final class Notifications {
                             else if (!recent.media.isEmpty()) trace("media: no preview resolved");
                         }
                     }
+                    NativeLine.Chat afterImages = NativeLine.chat(chat);
+                    if (!account.equals(NativeLine.account()) || afterImages == null
+                            || !NotificationPolicy.snapshotConsistent(
+                                    state.unread, state.readUp, afterImages.unread, afterImages.readUp)
+                            || !NativeLine.previewsAllowed()) {
+                        trace("preview: state changed during image load");
+                        return null;
+                    }
+                    if (!Settings.enabled(Settings.INFO)) {
+                        return builder.build();
+                    }
+                    if (mediaPreviews != null && !Settings.mediaPreviewAllowed()) {
+                        mediaPreviews = null;
+                        trace("media: preview disabled during load");
+                    }
                     return ConversationPreview.apply(
                             builder, snapshot.chat, name, state.unread, decision.recentMessages, icons, mediaPreviews);
                 }
@@ -865,7 +947,7 @@ public final class Notifications {
             String nChat = n.extras.getString("line.chat.id");
             if (nChat == null || !targetChats.contains(nChat)) continue;
             String nAccount = n.extras.getString(ACCOUNT);
-            if (nAccount != null && !account.equals(nAccount)) continue;
+            if (!NotificationPolicy.sameAccount(account, nAccount)) continue;
             if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) {
                 String group = n.getGroup();
                 if (group != null) affectedGroups.add(group);
@@ -885,7 +967,7 @@ public final class Notifications {
             if (summary == null || (summary.flags & Notification.FLAG_GROUP_SUMMARY) == 0
                     || (!isMessage(summary) && !isGenericSummary(summary))) continue;
             String summaryAccount = summary.extras.getString(ACCOUNT);
-            if (summaryAccount != null && !account.equals(summaryAccount)) continue;
+            if (!NotificationPolicy.sameAccount(account, summaryAccount)) continue;
             String group = summary.getGroup();
             if (group == null) {
                 String summaryChat = summary.extras.getString("line.chat.id");

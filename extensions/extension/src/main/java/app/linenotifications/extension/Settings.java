@@ -190,10 +190,6 @@ public final class Settings {
                 ? Strings.get("line_notify_fallback_chat", "Chat") : name);
         else editor.remove(key);
         editor.apply();
-        if (mute) {
-            NotificationManager manager = context().getSystemService(NotificationManager.class);
-            Notifications.cancelChatNotifications(manager, account, chat);
-        }
     }
 
     private static void pruneHiddenNotifications() {
@@ -207,7 +203,7 @@ public final class Settings {
                 if (notif == null || notif.extras == null || (notif.flags & Notification.FLAG_GROUP_SUMMARY) != 0) continue;
                 String chat = notif.extras.getString("line.chat.id");
                 String nAccount = notif.extras.getString(Notifications.ACCOUNT);
-                if ((nAccount == null || account.equals(nAccount))
+                if (NotificationPolicy.sameAccount(account, nAccount)
                         && NativeLine.regularChat(chat) && fullyMuted(account, chat)) {
                     hiddenChats.add(chat);
                 }

@@ -1,10 +1,11 @@
-## What's New in 0.1.17-dev
+## What's New in 0.1.18-dev
 
-- **Verified account required for single-room summary preservation**: Updates `NotificationPolicy.resolveGroupSummary` so unverified (`null`) child account stamps always fall back to `KEEP_GENERIC` rather than copying another notification's title, body, or tap action under a new account.
-- **Per-slot generation tracking & cross-chat pending cleanup**: Adds monotonic per-`(tag, id)` slot generation tokens (`SLOT_GENERATIONS`) and cross-chat pending slot clearing (`removePendingSlotLocked`), ensuring a delayed local-save callback or timeout from room A can never overwrite or cancel a newer notification posted on that slot by room B.
-- **Safe generic summary routing**: When rebuilding a multi-room `KEEP_GENERIC` summary, clears room-specific `line.chat.id` / `line.message.id` and hidden-room `contentIntent` (replacing with a launcher `PendingIntent` and tagging `GENERIC_SUMMARY`) while still recognizing generic summaries for cleanup when remaining rooms are dismissed or silenced.
-- **Post-load read-state recheck & exact DB push readiness**: Re-verifies `unread` and `readUp` after `NativeLine.mediaPreviews()` returns via `snapshotConsistent` (performing one bounded DB re-query if read state changed mid-load), requires exact `sourceOrder == posted` matching or confirmed DB row existence (`NativeLine.messageStored` / `MESSAGE_EXISTS_SQL`) in `NotificationPolicy.previewState`, and passes `success` through `ChatNotifications.change` so notification-shade mute only cancels notifications on success.
-- **Exact chat-list timestamps & surrogate-safe truncation**: Requires exact `rowCreatedTimeMillis == expectedTimeMillis` matching and `nativeText`-scoped `CHAT_LIST_CACHE` keys before replacing chat-list previews, and preserves UTF-16 surrogate pairs when truncating 80-character file/location details.
+- **Preserve pending pushes across trailing refreshes**: `Notifications.refreshActive()` now skips any `(tag, id)` slot currently reserved by a queued `PendingPost` (`hasPendingSlotLocked`) and no longer evicts pending slots during active refreshes, fixing the `0.1.17-dev` regression where a 400ms trailing refresh of an earlier notification dropped a waiting push.
+- **Per-item pending deadlines on unrelated room saves**: Tracks each `PendingPost`'s monotonic `deadlineMillis` (`NotificationPolicy.remainingHoldMillis`) so local-save callbacks (`onMessageStored`) only flush messages whose own DB row is stored, retaining unstored pushes until their original 1.2s deadline expires.
+- **Post-avatar preview privacy, account, and read-state guard**: Adds a final `afterImages` check (active account, `snapshotConsistent`, `NativeLine.previewsAllowed()`, `Settings.INFO`, and `Settings.mediaPreviewAllowed()`) right before `ConversationPreview.apply()`, closing races during `NativeLine.senderIcons()` in both normal and media-retry paths.
+- **Verified account required for notification cancellation & pruning**: Stamps `ACCOUNT` whenever `Not Too Much Silent` or `Mark as read` is included, and requires `NotificationPolicy.sameAccount` in `Notifications.cancelChatNotifications` (Pass 1 & Pass 2) and `Settings.pruneHiddenNotifications` so unstamped (`null`) notifications from another account are never canceled.
+- **Preserve existing notifications when "Hide completely" fails**: Separates local suppression preference updates (`Settings.setMuted`) from notification cancellation, canceling existing room notifications only inside `ChatNotifications.change`'s `finish` callback on `success && mode == HIDDEN`.
+- **Same-millisecond chat-list cache invalidation**: Adds `chatListCacheGeneration` and `NativeLine.invalidateChatListPreviewCache(account, chat)`, invoked from `Notifications.onMessageStored(chat)` so two attachments received in the same millisecond with identical LINE placeholder text reflect the latest file.
 
 ### Included Patches (LINE `26.16.0` / `261600106`, Patcher `2.3.0`, all `default = true`)
 - `Notification settings`: Adds localized patch settings UI & notification button presets.
@@ -15,6 +16,6 @@
 - `Restore push registration`: Restores Firebase installation registration after re-signing (`X-Android-Cert` only).
 
 ### Verification & Notes
-- Verified with 223 `NotificationPolicy` assertions, 26 Python tests, 2,178 static APK contracts (ARM64 & Universal; 2,116 `Mark as read`-only), compiled `resources.arsc` checks (77 keys × 7 locales), and live Galaxy S10e verification.
+- Verified with 224 `NotificationPolicy` assertions, 40 `ExtensionRuntimeTest` JVM behavioral checks, 26 Python tests, 2,244 static APK contracts (ARM64 & Universal; 2,182 `Mark as read`-only), compiled `resources.arsc` checks (77 keys × 7 locales), and live Galaxy S10e verification.
 - Original/patched LINE APKs, APKMs, and signing keys are never distributed. Provide your own official LINE `26.16.0` APKM.
 - Licensed under GPL-3.0 with `NOTICE`, `THIRD_PARTY_NOTICES.md`, source archive, and `SHA256SUMS.txt`.

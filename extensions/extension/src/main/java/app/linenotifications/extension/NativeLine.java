@@ -51,6 +51,7 @@ final class NativeLine {
     private static final String KEEP_NATIVE = "";
     private static final ExecutorService AVATAR_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Map<String, String> CHAT_LIST_CACHE = new LinkedHashMap<String, String>(64, 0.75f, true);
+    private static long chatListCacheGeneration = 0L;
     private static final Object PREVIEW_FILE_LOCK = new Object();
     private static volatile long mediaPreviewGeneration = 0L;
     private NativeLine() {}
@@ -287,7 +288,24 @@ final class NativeLine {
 
     static void clearChatListPreviewCache() {
         synchronized (CHAT_LIST_CACHE) {
+            chatListCacheGeneration++;
             CHAT_LIST_CACHE.clear();
+        }
+    }
+
+    static void invalidateChatListPreviewCache(String account, String chat) {
+        synchronized (CHAT_LIST_CACHE) {
+            chatListCacheGeneration++;
+            if (chat == null || chat.isEmpty() || CHAT_LIST_CACHE.isEmpty()) return;
+            String exactPrefix = (account != null && !account.isEmpty()) ? (account + ":" + chat + ":") : null;
+            String roomSegment = ":" + chat + ":";
+            java.util.Iterator<String> it = CHAT_LIST_CACHE.keySet().iterator();
+            while (it.hasNext()) {
+                String key = it.next();
+                if (exactPrefix != null ? key.startsWith(exactPrefix) : key.contains(roomSegment)) {
+                    it.remove();
+                }
+            }
         }
     }
 
@@ -295,7 +313,9 @@ final class NativeLine {
     static String chatListLastMessage(String chat, String account, String nativeText, long expectedTimeMillis) {
         if (!regularChat(chat) || account == null || account.isEmpty()) return nativeText;
         String key = account + ":" + chat + ":" + expectedTimeMillis + ":" + (nativeText == null ? "" : nativeText);
+        long startGen;
         synchronized (CHAT_LIST_CACHE) {
+            startGen = chatListCacheGeneration;
             String cached = CHAT_LIST_CACHE.get(key);
             if (cached != null) return KEEP_NATIVE.equals(cached) ? nativeText : cached;
         }
@@ -329,12 +349,14 @@ final class NativeLine {
                     }
                 }
                 synchronized (CHAT_LIST_CACHE) {
-                    CHAT_LIST_CACHE.put(key, cacheValue);
-                    if (CHAT_LIST_CACHE.size() > MAX_CHAT_LIST_CACHE) {
-                        java.util.Iterator<String> it = CHAT_LIST_CACHE.keySet().iterator();
-                        if (it.hasNext()) {
-                            it.next();
-                            it.remove();
+                    if (chatListCacheGeneration == startGen) {
+                        CHAT_LIST_CACHE.put(key, cacheValue);
+                        if (CHAT_LIST_CACHE.size() > MAX_CHAT_LIST_CACHE) {
+                            java.util.Iterator<String> it = CHAT_LIST_CACHE.keySet().iterator();
+                            if (it.hasNext()) {
+                                it.next();
+                                it.remove();
+                            }
                         }
                     }
                 }
