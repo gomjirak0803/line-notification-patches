@@ -72,6 +72,10 @@ final class NativeLine {
             "SELECT type, created_time, content, attachement_type, parameter, location_name, location_address "
             + "FROM chat_history WHERE chat_id = ? ORDER BY created_time DESC, id DESC LIMIT 1";
 
+    static final String MESSAGE_EXISTS_SQL =
+            "SELECT 1 FROM chat_history WHERE chat_id = ? "
+            + "AND server_id = ? AND from_mid IS NOT NULL AND from_mid != ? LIMIT 1";
+
     static Class<?> type(String name) throws ClassNotFoundException {
         return Class.forName(name, false, Settings.context().getClassLoader());
     }
@@ -141,18 +145,24 @@ final class NativeLine {
             if (state == null || state.unread == 0) return false;
             long readUp = state.readUp == null || state.readUp.isEmpty() ? 0 : Long.parseLong(state.readUp);
             if (posted <= readUp) return false;
-            boolean saved;
-            try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
-                    context.getDatabasePath("naver_line").getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
-                 Cursor cursor = db.rawQuery(
-                         "SELECT 1 FROM chat_history WHERE chat_id = ? "
-                         + "AND server_id = ? AND from_mid IS NOT NULL AND from_mid != ? LIMIT 1",
-                         new String[]{chat, postedMessageId, account})) {
-                saved = cursor.moveToFirst();
-            }
+            boolean saved = messageStored(context, chat, account, postedMessageId);
             // Account replacement can also replace the local database while this runs.
             return saved && account.equals(account());
         } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    static boolean messageStored(Context context, String chat, String account, String postedMessageId) {
+        if (context == null || !regularChat(chat) || account == null || account.isEmpty()
+                || postedMessageId == null || postedMessageId.isEmpty()) {
+            return false;
+        }
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
+                context.getDatabasePath("naver_line").getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+             Cursor cursor = db.rawQuery(MESSAGE_EXISTS_SQL, new String[]{chat, postedMessageId, account})) {
+            return cursor.moveToFirst();
+        } catch (RuntimeException ignored) {
             return false;
         }
     }
@@ -284,7 +294,7 @@ final class NativeLine {
     /** Resolves detailed `[File]`/`[Location]`/typed labels for chat-list rows from local DB cache. */
     static String chatListLastMessage(String chat, String account, String nativeText, long expectedTimeMillis) {
         if (!regularChat(chat) || account == null || account.isEmpty()) return nativeText;
-        String key = account + ":" + chat + ":" + expectedTimeMillis;
+        String key = account + ":" + chat + ":" + expectedTimeMillis + ":" + (nativeText == null ? "" : nativeText);
         synchronized (CHAT_LIST_CACHE) {
             String cached = CHAT_LIST_CACHE.get(key);
             if (cached != null) return KEEP_NATIVE.equals(cached) ? nativeText : cached;
@@ -301,7 +311,7 @@ final class NativeLine {
                 String parameter = cursor.getString(4);
                 String locationName = cursor.getString(5);
                 String locationAddress = cursor.getString(6);
-                if (Math.abs(rowTime - expectedTimeMillis) > 2000L) {
+                if (rowTime != expectedTimeMillis) {
                     return nativeText;
                 }
                 int effectiveType = NotificationPolicy.effectiveChatListAttachmentType(msgType, attType);

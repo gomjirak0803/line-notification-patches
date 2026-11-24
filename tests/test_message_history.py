@@ -119,6 +119,22 @@ class MessageHistoryTest(unittest.TestCase):
             [(1, 4001, None, 15, None, "Gangnam", "Seoul")],
         )
 
+    def test_message_exists_query_checks_room_id_and_sender(self):
+        self.db.executemany(
+            "INSERT INTO chat_history(server_id, created_time, from_mid, content, chat_id, attachement_type, parameter, location_name, location_address) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            [
+                ("501", 5001, "peer", "stored", "test-room", 0, None, None, None),
+                ("502", 5002, "self", "outgoing", "test-room", 0, None, None, None),
+                ("503", 5003, None, "system", "test-room", 0, None, None, None),
+                ("504", 5004, "peer", "wrong-room", "other-room", 0, None, None, None),
+            ],
+        )
+        sql = production_query("MESSAGE_EXISTS_SQL")
+        self.assertEqual(self.db.execute(sql, ("test-room", "501", "self")).fetchall(), [(1,)])
+        for sid in ("502", "503", "504", "999"):
+            self.assertEqual(self.db.execute(sql, ("test-room", sid, "self")).fetchall(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

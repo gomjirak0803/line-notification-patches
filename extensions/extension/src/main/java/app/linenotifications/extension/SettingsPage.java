@@ -294,7 +294,7 @@ final class SettingsPage extends Dialog {
                         if (!account.equals(NativeLine.account())) return false;
                         ChatNotifications.change(getContext(), chat,
                                 Settings.quiet(account, chat) ? ChatNotifications.QUIET : ChatNotifications.NORMAL,
-                                null, () -> { if (isShowing()) showMuted(); });
+                                null, success -> { if (isShowing()) showMuted(); });
                         return false;
                     } catch (ReflectiveOperationException | RuntimeException ignored) { return false; }
                 });

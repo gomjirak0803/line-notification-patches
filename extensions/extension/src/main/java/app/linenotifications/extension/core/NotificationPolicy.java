@@ -46,13 +46,22 @@ public final class NotificationPolicy {
 
     /** Push can precede local persistence. Never label the incoming push with an older count. */
     public static PreviewState previewState(int unread, String readUp, String postedId, List<Message> messages) {
+        return previewState(unread, readUp, postedId, messages, false);
+    }
+
+    /** Push can precede local persistence; requires exact message match or confirmed local row. */
+    public static PreviewState previewState(int unread, String readUp, String postedId,
+                                            List<Message> messages, boolean postedStored) {
         try {
             long posted = Long.parseLong(postedId);
             long boundary = readUp == null || readUp.isEmpty() ? 0 : Long.parseLong(readUp);
             if (posted <= 0 || boundary < 0) return PreviewState.NATIVE;
             if (posted <= boundary) return PreviewState.READ;
-            if (unread > 0) for (Message message : messages) {
-                if (message.sourceOrder >= posted) return PreviewState.LOCAL;
+            if (unread > 0) {
+                if (postedStored) return PreviewState.LOCAL;
+                if (messages != null) for (Message message : messages) {
+                    if (message != null && message.sourceOrder == posted) return PreviewState.LOCAL;
+                }
             }
         } catch (NumberFormatException ignored) { }
         return PreviewState.NATIVE;
@@ -428,12 +437,12 @@ public final class NotificationPolicy {
         }
     }
 
-    /** Formats a typed attachment preview for the chat list when the latest stored row matches native time. */
+    /** Formats a typed attachment preview for the chat list only on exact timestamp match. */
     public static String resolveChatListMessage(String nativeText, long expectedTimeMillis,
                                                 int messageType, long rowCreatedTimeMillis,
                                                 String content, int attachmentType, String label,
                                                 String parameter, String locationName, String locationAddress) {
-        if (Math.abs(rowCreatedTimeMillis - expectedTimeMillis) > 2000L) return nativeText;
+        if (rowCreatedTimeMillis != expectedTimeMillis) return nativeText;
         int effectiveType = effectiveChatListAttachmentType(messageType, attachmentType);
         if (effectiveType == 0) return nativeText;
         return resolveMessageBody(content, effectiveType, label, parameter, locationName, locationAddress);
@@ -711,15 +720,18 @@ public final class NotificationPolicy {
 
     private static String cleanSingleLine(String value, int maxChars, boolean appendEllipsis) {
         if (value == null || value.isEmpty() || maxChars <= 0) return null;
-        StringBuilder sb = new StringBuilder(Math.min(value.length(), maxChars + 1));
+        StringBuilder sb = new StringBuilder(Math.min(value.length(), maxChars + 2));
         boolean pendingSpace = false;
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
             if (Character.isWhitespace(c) || c < ' ') {
                 if (sb.length() > 0) pendingSpace = true;
             } else {
+                boolean isPair = Character.isHighSurrogate(c)
+                        && i + 1 < value.length() && Character.isLowSurrogate(value.charAt(i + 1));
+                int charUnits = isPair ? 2 : 1;
                 if (!appendEllipsis) {
-                    int needed = (pendingSpace ? 1 : 0) + (Character.isHighSurrogate(c) ? 2 : 1);
+                    int needed = (pendingSpace ? 1 : 0) + charUnits;
                     if (sb.length() + needed > maxChars) break;
                 }
                 if (pendingSpace) {
@@ -727,8 +739,14 @@ public final class NotificationPolicy {
                     pendingSpace = false;
                 }
                 sb.append(c);
+                if (isPair) {
+                    sb.append(value.charAt(++i));
+                }
                 if (appendEllipsis && sb.length() > maxChars) {
-                    return sb.substring(0, maxChars) + "\u2026";
+                    int cut = maxChars;
+                    if (cut > 0 && Character.isHighSurrogate(sb.charAt(cut - 1))) cut--;
+                    while (cut > 0 && sb.charAt(cut - 1) == ' ') cut--;
+                    return sb.substring(0, cut) + "\u2026";
                 }
             }
         }
@@ -762,7 +780,7 @@ public final class NotificationPolicy {
             if (child == null || !child.regularMessage || child.chatId == null || child.chatId.isEmpty()) {
                 return SummaryAction.KEEP_GENERIC;
             }
-            if (child.accountId != null && !sameAccount(activeAccount, child.accountId)) {
+            if (!sameAccount(activeAccount, child.accountId)) {
                 return SummaryAction.KEEP_GENERIC;
             }
             if (singleChat == null) {
@@ -772,6 +790,17 @@ public final class NotificationPolicy {
             }
         }
         return singleChat != null ? SummaryAction.KEEP_SINGLE_ROOM : SummaryAction.KEEP_GENERIC;
+    }
+
+    /** Returns true only when a slot generation token matches the latest post on that slot. */
+    public static boolean slotGenerationMatches(long expectedGeneration, long currentGeneration) {
+        return expectedGeneration > 0L && expectedGeneration == currentGeneration;
+    }
+
+    /** Returns true only when unread count and read boundary remain unchanged after loading. */
+    public static boolean snapshotConsistent(int beforeUnread, String beforeReadUp,
+                                               int afterUnread, String afterReadUp) {
+        return afterUnread > 0 && beforeUnread == afterUnread && Objects.equals(beforeReadUp, afterReadUp);
     }
 
     /** Returns true only when settings, privacy, cache generation, and account all remain valid. */

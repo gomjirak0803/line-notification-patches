@@ -1,5 +1,20 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.1.17-dev` Slot generation, generic summary routing, exact DB/timestamp guards & surrogate-safe truncation — 2026-11-24
+
+Required verified matching child account stamps in `NotificationPolicy.resolveGroupSummary`, added per-`(tag, id)` slot generation tracking (`SLOT_GENERATIONS`) and cross-chat pending slot cleanup (`removePendingSlotLocked`), replaced `contentIntent` and cleared room extras on `KEEP_GENERIC` multi-room summaries (`GENERIC_SUMMARY` + launcher fallback), added post-load `snapshotConsistent` re-checks, enforced exact `sourceOrder == posted` / `NativeLine.messageStored` (`MESSAGE_EXISTS_SQL`) readiness and exact `rowTime == expectedTimeMillis` chat-list matching (`CHAT_LIST_CACHE` scoped by `nativeText`), passed `success` through `ChatNotifications.change`, and preserved UTF-16 surrogate pairs in `NotificationPolicy.cleanSingleLine`.
+
+* **Automated checks**: 223 `NotificationPolicy` assertions, 26 Python unit tests (`test_bundle_metadata.py`, `test_i18n_resources.py`, `test_line_test_sender.py`, `test_message_history.py` including `test_message_exists_query_checks_room_id_and_sender`), 2,178 static APK contracts (ARM64), 2,178 (Universal), 2,116 (`Mark as read`-only); `morphe-desktop list-patches` verified `Enabled: true` on all 6 patches.
+* **SHA-256**: local `0.1.17-dev` bundle `28498d47f29f80e8b3fc2bd6226639b8f3f7b05599e3365871fb794b478d0775`; S10e-tested signed APK `d000ff785780a2cc694b6083d847675267464b803383019d879213ee8b6ef76a` *(built from identical DEX and patch code immediately prior to bumping `VERSION` from `0.1.16-dev` to `0.1.17-dev`)*.
+
+### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1) verification
+| Feature / Case | Result |
+| --- | --- |
+| 1h snooze auto-expiry & `HOLD_PENDING` exact flush | Both Room A (1:1 OA) and Room B (group) returned cleanly to `NewMessages` after 1h; location push queued (`post: held awaiting local save`) and flushed after local commit (`post: flushed after local save`) |
+| 80-char emoji boundary truncation | 79 ASCII `'a'` + `😀` truncated to `[위치] ` + 79 `'a'` + `…` with zero unpaired UTF-16 surrogates |
+| Exact-timestamp chat-list preview | Inspected LINE's live Chats list via `uiautomator`: confirmed `[위치] 강남역 정확일치 확인` displayed (`HAS_PREFIXED_LOCATION=True`) under strict `rowTime == expectedTimeMillis` |
+| Two-room `Quiet 1h` summary preservation & media staging | Tapped `1시간 조용히` on Room A (`ROOM_A_V17_TEST`): Room A (`2028475556`) canceled, Room B (`568452307`, 3 messages + sticker preview `m_02e34420551d2ca4.png`) preserved, and summary `16880000` (`summary: kept remaining room`) rewritten to Room B (`ccbc8644…`); 0 `AndroidRuntime:E` crashes |
+
 ## `0.1.16-dev` Pending account isolation, group summary preservation & CI test coverage — 2026-11-24
 
 Isolated held pending notifications by `ChatKey(account, chat)` with pre-transform and pre-notify active-account checks, replaced global `clearSummaries()` with `Notifications.cancelChatNotifications` + `NotificationPolicy.resolveGroupSummary` (updating `shortcutId`, `line.chat.id`, `line.message.id`, title/text, and `publicVersion` after Android `recoverBuilder.build()`), added `mediaPreviewGeneration` under `PREVIEW_FILE_LOCK` with post-load re-checks, and gated both `scripts/build.py` and `.github/workflows/release.yml` on the full 25-test Python suite (`test_*.py`).

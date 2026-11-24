@@ -3,8 +3,10 @@ package app.linenotifications.extension;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.RemoteInput;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -30,6 +32,7 @@ public final class Notifications {
     private static final String ESCALATE_ALERT = "line_notification_patches.escalate_alert";
     private static final String HOLD_PENDING = "line_notification_patches.hold_pending";
     private static final String NATIVE_ACTIONS = "line_notification_patches.native_actions";
+    private static final String GENERIC_SUMMARY = "line_notification_patches.generic_summary";
     private static final String MESSAGE_TAG = "NOTIFICATION_TAG_MESSAGE";
     private static final String DEBUG_TAG = "LineNotifyPatch";
     private static final long PENDING_HOLD_MS = 1200L;
@@ -38,7 +41,29 @@ public final class Notifications {
     private static final Map<NotificationPolicy.ChatKey, Runnable> DEFERRED = new HashMap<>();
     private static final Map<NotificationPolicy.ChatKey, List<PendingPost>> PENDING_POSTS = new HashMap<>();
     private static final Map<NotificationPolicy.ChatKey, Runnable> PENDING_TIMEOUTS = new HashMap<>();
+    private static final Map<SlotKey, Long> SLOT_GENERATIONS = new HashMap<>();
+    private static long nextSlotGeneration = 0L;
     private Notifications() {}
+
+    private static final class SlotKey {
+        final String tag;
+        final int id;
+
+        SlotKey(String tag, int id) {
+            this.tag = tag;
+            this.id = id;
+        }
+
+        @Override public boolean equals(Object other) {
+            if (!(other instanceof SlotKey)) return false;
+            SlotKey that = (SlotKey) other;
+            return id == that.id && java.util.Objects.equals(tag, that.tag);
+        }
+
+        @Override public int hashCode() {
+            return 31 * (tag == null ? 0 : tag.hashCode()) + id;
+        }
+    }
 
     private static final class PendingPost {
         final String account;
@@ -46,13 +71,16 @@ public final class Notifications {
         final String tag;
         final int id;
         final Notification original;
+        final long slotGeneration;
 
-        PendingPost(String account, NotificationManager manager, String tag, int id, Notification original) {
+        PendingPost(String account, NotificationManager manager, String tag, int id,
+                    Notification original, long slotGeneration) {
             this.account = account;
             this.manager = manager;
             this.tag = tag;
             this.id = id;
             this.original = original;
+            this.slotGeneration = slotGeneration;
         }
 
         boolean sameSlot(String otherTag, int otherId) {
@@ -96,14 +124,38 @@ public final class Notifications {
         } catch (ReflectiveOperationException | RuntimeException ignored) { return false; }
     }
 
+    private static long advanceSlotGenerationLocked(String tag, int id) {
+        if (SLOT_GENERATIONS.size() > 256 && PENDING_POSTS.isEmpty()) {
+            SLOT_GENERATIONS.clear();
+        }
+        long gen = ++nextSlotGeneration;
+        SLOT_GENERATIONS.put(new SlotKey(tag, id), gen);
+        return gen;
+    }
+
+    private static boolean isCurrentSlotGenerationLocked(String tag, int id, long expectedGen) {
+        Long current = SLOT_GENERATIONS.get(new SlotKey(tag, id));
+        return current != null && NotificationPolicy.slotGenerationMatches(expectedGen, current);
+    }
+
     public static synchronized void post(NotificationManager manager, String tag, int id, Notification original) {
-        postInternal(manager, tag, id, original, true, null);
+        postInternal(manager, tag, id, original, true, null, 0L);
     }
 
     private static void postInternal(NotificationManager manager, String tag, int id,
-                                     Notification original, boolean allowHold, String expectedAccount) {
+                                     Notification original, boolean allowHold,
+                                     String expectedAccount, long expectedSlotGen) {
         if (original == null) return;
-        if (expectedAccount != null) {
+        long currentSlotGen;
+        if (allowHold) {
+            currentSlotGen = advanceSlotGenerationLocked(tag, id);
+            removePendingSlotLocked(tag, id);
+        } else {
+            currentSlotGen = expectedSlotGen;
+            if (!isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
+                trace("post: pending dropped on newer slot post");
+                return;
+            }
             try {
                 if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())) {
                     trace("post: pending dropped on account change");
@@ -126,8 +178,12 @@ public final class Notifications {
             }
         }
         if (notification == null) {
+            if (!allowHold && !isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
+                trace("post: pending cancel superseded");
+                return;
+            }
             if (expectedAccount != null) clearPendingChatLocked(expectedAccount, chat);
-            else removePendingSlot(chat, tag, id);
+            else removePendingSlotLocked(tag, id);
             trace("post: suppressed");
             manager.cancel(tag, id);
             return;
@@ -142,14 +198,19 @@ public final class Notifications {
         if (allowHold && holdPending && isMessage(original) && NativeLine.regularChat(chat)) {
             if (stampedAccount != null && !stampedAccount.isEmpty()) {
                 purgeForeignPendingLocked(stampedAccount);
-                queuePending(new NotificationPolicy.ChatKey(stampedAccount, chat), manager, tag, id, original);
+                queuePending(new NotificationPolicy.ChatKey(stampedAccount, chat),
+                        manager, tag, id, original, currentSlotGen);
                 trace("post: held awaiting local save");
             } else {
                 trace("post: pending dropped without active account");
             }
             return;
         }
-        if (expectedAccount != null) {
+        if (!allowHold) {
+            if (!isCurrentSlotGenerationLocked(tag, id, expectedSlotGen)) {
+                trace("post: pending notify superseded");
+                return;
+            }
             try {
                 if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())
                         || (stampedAccount != null && !expectedAccount.equals(stampedAccount))) {
@@ -161,19 +222,16 @@ public final class Notifications {
                 return;
             }
         }
-        if (allowHold && chat != null) removePendingSlot(chat, tag, id);
         manager.notify(tag, id, notification);
         trace("post: delivered to Android");
         if (isMessage(notification)) deferRefresh(notification.extras.getString("line.chat.id"));
     }
 
-    private static void removePendingSlot(String chat, String tag, int id) {
-        if (chat == null) return;
+    private static void removePendingSlotLocked(String tag, int id) {
         Iterator<Map.Entry<NotificationPolicy.ChatKey, List<PendingPost>>> it = PENDING_POSTS.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<NotificationPolicy.ChatKey, List<PendingPost>> entry = it.next();
             NotificationPolicy.ChatKey key = entry.getKey();
-            if (!chat.equals(key.chatId)) continue;
             List<PendingPost> list = entry.getValue();
             for (int i = 0; i < list.size(); i++) {
                 if (list.get(i).sameSlot(tag, id)) {
@@ -211,7 +269,7 @@ public final class Notifications {
     }
 
     private static void queuePending(NotificationPolicy.ChatKey key, NotificationManager manager,
-                                     String tag, int id, Notification original) {
+                                     String tag, int id, Notification original, long slotGeneration) {
         List<PendingPost> list = PENDING_POSTS.get(key);
         if (list == null) {
             list = new ArrayList<>();
@@ -223,7 +281,7 @@ public final class Notifications {
                 break;
             }
         }
-        list.add(new PendingPost(key.accountId, manager, tag, id, original));
+        list.add(new PendingPost(key.accountId, manager, tag, id, original, slotGeneration));
         if (!PENDING_TIMEOUTS.containsKey(key)) {
             Runnable timeout = new Runnable() {
                 @Override public void run() {
@@ -259,8 +317,10 @@ public final class Notifications {
         }
         trace(timedOut ? "post: pending timeout flushed" : "post: flushed after local save");
         for (PendingPost item : list) {
-            if (NotificationPolicy.sameAccount(item.account, currentAccount)) {
-                postInternal(item.manager, item.tag, item.id, item.original, false, item.account);
+            if (NotificationPolicy.sameAccount(item.account, currentAccount)
+                    && isCurrentSlotGenerationLocked(item.tag, item.id, item.slotGeneration)) {
+                postInternal(item.manager, item.tag, item.id, item.original, false,
+                        item.account, item.slotGeneration);
             }
         }
     }
@@ -377,8 +437,11 @@ public final class Notifications {
                             Notification.Builder.recoverBuilder(Settings.context(), updated.publicVersion)
                                     .setActions(new Notification.Action[0]), "LINE", newMessage);
                 }
-                if (updated == null) manager.cancel(active.getTag(), active.getId());
-                else {
+                if (updated == null) {
+                    advanceSlotGenerationLocked(active.getTag(), active.getId());
+                    removePendingSlotLocked(active.getTag(), active.getId());
+                    manager.cancel(active.getTag(), active.getId());
+                } else {
                     boolean escalate = updated.extras != null && updated.extras.getBoolean(ESCALATE_ALERT, false);
                     if (updated.extras != null) {
                         updated.extras.remove(HOLD_PENDING);
@@ -389,6 +452,8 @@ public final class Notifications {
                     } else {
                         updated.flags |= Notification.FLAG_ONLY_ALERT_ONCE;
                     }
+                    advanceSlotGenerationLocked(active.getTag(), active.getId());
+                    removePendingSlotLocked(active.getTag(), active.getId());
                     manager.notify(active.getTag(), active.getId(), updated);
                 }
                 trace("local save: active notification refreshed");
@@ -401,6 +466,25 @@ public final class Notifications {
     private static boolean isMessage(Notification n) {
         return n.extras != null && n.extras.getString("line.chat.id") != null
                 && (n.flags & (Notification.FLAG_FOREGROUND_SERVICE | Notification.FLAG_ONGOING_EVENT)) == 0;
+    }
+
+    private static boolean isGenericSummary(Notification n) {
+        return n != null && n.extras != null && n.extras.getBoolean(GENERIC_SUMMARY, false)
+                && (n.flags & Notification.FLAG_GROUP_SUMMARY) != 0
+                && (n.flags & (Notification.FLAG_FOREGROUND_SERVICE | Notification.FLAG_ONGOING_EVENT)) == 0;
+    }
+
+    private static PendingIntent genericSummaryContentIntent() {
+        try {
+            Context ctx = Settings.context();
+            Intent launch = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+            if (launch == null) return null;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            return PendingIntent.getActivity(ctx, 0, launch,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private static Notification transform(NotificationManager manager, String tag, Notification original)
@@ -435,6 +519,7 @@ public final class Notifications {
         Notification.Builder builder = Notification.Builder.recoverBuilder(Settings.context(), original);
         Bundle extras = new Bundle(original.extras);
         extras.putString(ACCOUNT, account);
+        extras.remove(GENERIC_SUMMARY);
         if (originalChannel != null) extras.putString(ORIGINAL_CHANNEL, originalChannel);
         if (bypass.matched()) {
             muted = false;
@@ -493,7 +578,17 @@ public final class Notifications {
                     NativeLine.RecentSnapshot recent = NativeLine.recent(
                             chat, account, state, settings.maxRecentMessages);
                     List<NotificationPolicy.Message> messages = recent.messages;
-                    NotificationPolicy.PreviewState readiness = NotificationPolicy.previewState(state.unread, state.readUp, posted, messages);
+                    boolean postedInRecent = false;
+                    for (NotificationPolicy.Message m : messages) {
+                        if (posted.equals(m.id)) {
+                            postedInRecent = true;
+                            break;
+                        }
+                    }
+                    boolean postedStored = postedInRecent
+                            || NativeLine.messageStored(Settings.context(), chat, account, posted);
+                    NotificationPolicy.PreviewState readiness = NotificationPolicy.previewState(
+                            state.unread, state.readUp, posted, messages, postedStored);
                     if (readiness == NotificationPolicy.PreviewState.READ) return null;
                     if (readiness == NotificationPolicy.PreviewState.NATIVE) {
                         trace("preview: waiting for local save");
@@ -504,9 +599,12 @@ public final class Notifications {
                     // A concurrent read/account change invalidates this preview. Let the native
                     // notification/sync path produce the next state; never post stale plaintext.
                     NativeLine.Chat after = NativeLine.chat(chat);
-                    if (!account.equals(NativeLine.account()) || after == null || after.unread == 0) return null;
-                    if (state.unread != after.unread || !java.util.Objects.equals(state.readUp, after.readUp)
-                            || !NativeLine.previewsAllowed()) return null;
+                    if (!account.equals(NativeLine.account()) || after == null
+                            || !NotificationPolicy.snapshotConsistent(
+                                    state.unread, state.readUp, after.unread, after.readUp)
+                            || !NativeLine.previewsAllowed()) {
+                        return null;
+                    }
                     NotificationPolicy.Snapshot snapshot = new NotificationPolicy.Snapshot(
                             new NotificationPolicy.ChatKey(account, chat), muted, true, state.unread, false, messages);
                     NotificationPolicy.Decision decision = NotificationPolicy.evaluate(settings, snapshot, false);
@@ -526,13 +624,62 @@ public final class Notifications {
                         if (!Settings.enabled(Settings.INFO)) {
                             return builder.build();
                         }
-                        if (!Settings.mediaPreviewAllowed()) {
+                        if (!NotificationPolicy.snapshotConsistent(
+                                state.unread, state.readUp, afterMedia.unread, afterMedia.readUp)) {
+                            trace("preview: snapshot changed during media load, re-querying");
+                            NativeLine.RecentSnapshot retryRecent = NativeLine.recent(
+                                    chat, account, afterMedia, settings.maxRecentMessages);
+                            List<NotificationPolicy.Message> retryMessages = retryRecent.messages;
+                            boolean retryInRecent = false;
+                            for (NotificationPolicy.Message m : retryMessages) {
+                                if (posted.equals(m.id)) {
+                                    retryInRecent = true;
+                                    break;
+                                }
+                            }
+                            boolean retryPostedStored = retryInRecent
+                                    || NativeLine.messageStored(Settings.context(), chat, account, posted);
+                            NotificationPolicy.PreviewState retryReadiness = NotificationPolicy.previewState(
+                                    afterMedia.unread, afterMedia.readUp, posted, retryMessages, retryPostedStored);
+                            if (retryReadiness != NotificationPolicy.PreviewState.LOCAL) {
+                                return null;
+                            }
+                            NativeLine.Chat afterRetry = NativeLine.chat(chat);
+                            if (!account.equals(NativeLine.account()) || afterRetry == null
+                                    || !NotificationPolicy.snapshotConsistent(
+                                            afterMedia.unread, afterMedia.readUp, afterRetry.unread, afterRetry.readUp)
+                                    || !NativeLine.previewsAllowed()) {
+                                return null;
+                            }
+                            if (!Settings.enabled(Settings.INFO)) {
+                                return builder.build();
+                            }
+                            state = afterMedia;
+                            snapshot = new NotificationPolicy.Snapshot(
+                                    new NotificationPolicy.ChatKey(account, chat), muted, true, state.unread, false, retryMessages);
+                            decision = NotificationPolicy.evaluate(settings, snapshot, false);
+                            name = state.name == null || state.name.isEmpty()
+                                    ? String.valueOf(original.extras.getCharSequence(Notification.EXTRA_TITLE, "LINE")) : state.name;
+                            icons = NativeLine.senderIcons(
+                                    Settings.context(), account, !chat.startsWith("u"), original, decision.recentMessages);
+                            if (!Settings.mediaPreviewAllowed()) {
+                                mediaPreviews = null;
+                                trace("media: preview disabled during load");
+                            } else if (mediaPreviews != null && !mediaPreviews.isEmpty()) {
+                                Map<String, NativeLine.MediaPreview> filtered = new HashMap<>();
+                                for (NotificationPolicy.Message msg : decision.recentMessages) {
+                                    NativeLine.MediaPreview mp = mediaPreviews.get(msg.id);
+                                    if (mp != null) filtered.put(msg.id, mp);
+                                }
+                                mediaPreviews = filtered;
+                            }
+                        } else if (!Settings.mediaPreviewAllowed()) {
                             mediaPreviews = null;
                             trace("media: preview disabled during load");
-                        } else if (!mediaPreviews.isEmpty()) {
-                            trace("media: previews attached");
-                        } else if (!recent.media.isEmpty()) {
-                            trace("media: no preview resolved");
+                        }
+                        if (mediaPreviews != null) {
+                            if (!mediaPreviews.isEmpty()) trace("media: previews attached");
+                            else if (!recent.media.isEmpty()) trace("media: no preview resolved");
                         }
                     }
                     return ConversationPreview.apply(
@@ -727,19 +874,24 @@ public final class Notifications {
                 String group = n.getGroup();
                 if (group != null) affectedGroups.add(group);
                 canceledKeys.add(sbn.getKey());
+                advanceSlotGenerationLocked(sbn.getTag(), sbn.getId());
+                removePendingSlotLocked(sbn.getTag(), sbn.getId());
                 manager.cancel(sbn.getTag(), sbn.getId());
             }
         }
         if (affectedGroups.isEmpty() && !cancelUngroupedTargetSummaries) return;
         for (StatusBarNotification sbn : active) {
             Notification summary = sbn.getNotification();
-            if (summary == null || (summary.flags & Notification.FLAG_GROUP_SUMMARY) == 0 || !isMessage(summary)) continue;
+            if (summary == null || (summary.flags & Notification.FLAG_GROUP_SUMMARY) == 0
+                    || (!isMessage(summary) && !isGenericSummary(summary))) continue;
             String summaryAccount = summary.extras.getString(ACCOUNT);
             if (summaryAccount != null && !account.equals(summaryAccount)) continue;
             String group = summary.getGroup();
             if (group == null) {
                 String summaryChat = summary.extras.getString("line.chat.id");
                 if (cancelUngroupedTargetSummaries && summaryChat != null && targetChats.contains(summaryChat)) {
+                    advanceSlotGenerationLocked(sbn.getTag(), sbn.getId());
+                    removePendingSlotLocked(sbn.getTag(), sbn.getId());
                     manager.cancel(sbn.getTag(), sbn.getId());
                 }
                 continue;
@@ -763,6 +915,8 @@ public final class Notifications {
             }
             NotificationPolicy.SummaryAction action = NotificationPolicy.resolveGroupSummary(account, remainingInfo);
             if (action == NotificationPolicy.SummaryAction.CANCEL) {
+                advanceSlotGenerationLocked(sbn.getTag(), sbn.getId());
+                removePendingSlotLocked(sbn.getTag(), sbn.getId());
                 manager.cancel(sbn.getTag(), sbn.getId());
             } else {
                 rebuildSummaryWithoutCanceledChat(manager, sbn, summary, account, action, latestRemaining);
@@ -783,9 +937,10 @@ public final class Notifications {
             }
             String newMessage = Strings.get("line_notify_new_message", "You have a new message.");
             Notification remainingChild = latestRemaining == null ? null : latestRemaining.getNotification();
+            boolean keepSingleRoom = action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM;
             CharSequence title = "LINE";
             CharSequence text = newMessage;
-            if (action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM && previewsAllowed
+            if (keepSingleRoom && previewsAllowed
                     && remainingChild != null && remainingChild.extras != null) {
                 title = remainingChild.extras.getCharSequence(Notification.EXTRA_TITLE, "LINE");
                 text = remainingChild.extras.getCharSequence(Notification.EXTRA_TEXT, newMessage);
@@ -794,36 +949,46 @@ public final class Notifications {
                     ? null : remainingChild.extras.getString("line.chat.id");
             String remainingMessage = remainingChild == null || remainingChild.extras == null
                     ? null : remainingChild.extras.getString("line.message.id");
-            String remainingShortcut = action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
+            String remainingShortcut = keepSingleRoom
                     && remainingChild != null ? remainingChild.getShortcutId() : null;
+            PendingIntent targetIntent = keepSingleRoom && remainingChild != null && remainingChild.contentIntent != null
+                    ? remainingChild.contentIntent : genericSummaryContentIntent();
             Notification.Builder builder = Notification.Builder.recoverBuilder(Settings.context(), summary)
-                    .setOnlyAlertOnce(true).setShortcutId(remainingShortcut).setActions(new Notification.Action[0]);
-            if (action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
-                    && remainingChild != null && remainingChild.contentIntent != null) {
-                builder.setContentIntent(remainingChild.contentIntent);
-            }
+                    .setOnlyAlertOnce(true).setShortcutId(remainingShortcut)
+                    .setContentIntent(targetIntent).setActions(new Notification.Action[0]);
             Notification rebuilt = plainSummary(builder, title, text);
+            rebuilt.contentIntent = targetIntent;
             // Android's recoverBuilder overlays the original mN.extras during build(); mutate built extras after.
             rebuilt.extras.putString(ACCOUNT, account);
-            if (remainingChat != null && !remainingChat.isEmpty()) rebuilt.extras.putString("line.chat.id", remainingChat);
-            else rebuilt.extras.remove("line.chat.id");
-            if (remainingMessage != null && !remainingMessage.isEmpty()) rebuilt.extras.putString("line.message.id", remainingMessage);
-            else rebuilt.extras.remove("line.message.id");
+            if (keepSingleRoom) {
+                rebuilt.extras.remove(GENERIC_SUMMARY);
+                if (remainingChat != null && !remainingChat.isEmpty()) rebuilt.extras.putString("line.chat.id", remainingChat);
+                else rebuilt.extras.remove("line.chat.id");
+                if (remainingMessage != null && !remainingMessage.isEmpty()) rebuilt.extras.putString("line.message.id", remainingMessage);
+                else rebuilt.extras.remove("line.message.id");
+            } else {
+                rebuilt.extras.putBoolean(GENERIC_SUMMARY, true);
+                rebuilt.extras.remove("line.chat.id");
+                rebuilt.extras.remove("line.message.id");
+            }
             rebuilt.extras.remove(HOLD_PENDING);
             rebuilt.extras.remove(ESCALATE_ALERT);
             if (summary.publicVersion != null) {
                 Notification pub = plainSummary(
                         Notification.Builder.recoverBuilder(Settings.context(), summary.publicVersion)
-                                .setShortcutId(null).setActions(new Notification.Action[0]),
+                                .setShortcutId(null).setContentIntent(null).setActions(new Notification.Action[0]),
                         "LINE", newMessage);
+                pub.contentIntent = null;
+                pub.extras.remove(GENERIC_SUMMARY);
                 pub.extras.remove("line.chat.id");
                 pub.extras.remove("line.message.id");
                 rebuilt.publicVersion = pub;
             }
             rebuilt.flags |= Notification.FLAG_ONLY_ALERT_ONCE;
+            advanceSlotGenerationLocked(sbn.getTag(), sbn.getId());
+            removePendingSlotLocked(sbn.getTag(), sbn.getId());
             manager.notify(sbn.getTag(), sbn.getId(), rebuilt);
-            trace(action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
-                    ? "summary: kept remaining room" : "summary: kept multi-room");
+            trace(keepSingleRoom ? "summary: kept remaining room" : "summary: kept multi-room");
         } catch (RuntimeException ignored) {
             trace("summary: rebuild failed");
         }

@@ -65,7 +65,8 @@ final class ChatNotifications {
         } catch (ReflectiveOperationException | RuntimeException ignored) { }
     }
 
-    static void change(Context context, String chat, int mode, Object nativeCallback, Runnable completed) {
+    static void change(Context context, String chat, int mode, Object nativeCallback,
+                       java.util.function.Consumer<Boolean> completed) {
         try {
             if (!NativeLine.regularChat(chat)) return;
             String account = NativeLine.account();
@@ -104,7 +105,7 @@ final class ChatNotifications {
                                 "Setting updated. Please reopen the chat menu."));
                     }
                     if (success) refreshChatList();
-                    if (completed != null) completed.run();
+                    if (completed != null) completed.accept(success);
                 });
             };
             WORKER.execute(() -> {

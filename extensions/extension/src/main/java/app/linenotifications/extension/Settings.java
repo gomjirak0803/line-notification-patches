@@ -165,7 +165,8 @@ public final class Settings {
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return true;
         }
-        ChatNotifications.change(context, chat, ChatNotifications.QUIET, null, () -> {
+        ChatNotifications.change(context, chat, ChatNotifications.QUIET, null, success -> {
+            if (!Boolean.TRUE.equals(success)) return;
             try {
                 if (!account.equals(NativeLine.account())) return;
             } catch (ReflectiveOperationException | RuntimeException ignored) {

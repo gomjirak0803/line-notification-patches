@@ -64,8 +64,18 @@ public final class NotificationPolicyTest {
                 "An already-read notification is not revived by a persistence refresh");
         check(NotificationPolicy.previewState(1, "102", "101", Arrays.asList(message("103", 103)))
                         == NotificationPolicy.PreviewState.READ, "New unread messages cannot revive an older read push");
-        check(NotificationPolicy.previewState(6, "100", "101", Arrays.asList(message("106", 106)))
-                        == NotificationPolicy.PreviewState.LOCAL, "A newer committed snapshot can cover an earlier push outside the retained history window");
+        check(NotificationPolicy.previewState(1, "100", "103", Arrays.asList(message("104", 104)))
+                        == NotificationPolicy.PreviewState.NATIVE,
+                "Unstored out-of-order push must not treat newer row 104 as readiness for push 103");
+        check(NotificationPolicy.previewState(1, "100", "103", Arrays.asList(message("104", 104)), false)
+                        == NotificationPolicy.PreviewState.NATIVE,
+                "5-arg previewState holds when neither messages nor DB confirm push 103");
+        check(NotificationPolicy.previewState(6, "100", "101", Arrays.asList(message("106", 106)), true)
+                        == NotificationPolicy.PreviewState.LOCAL,
+                "DB-confirmed out-of-window push resolves LOCAL");
+        check(NotificationPolicy.previewState(6, "100", "101", Arrays.asList(message("106", 106)), false)
+                        == NotificationPolicy.PreviewState.NATIVE,
+                "Unconfirmed out-of-window push waits instead of relying on row 106");
         check(NotificationPolicy.previewState(1, "100", "unknown", first) == NotificationPolicy.PreviewState.NATIVE,
                 "Unknown push IDs do not invent a local count");
     }
@@ -312,6 +322,19 @@ public final class NotificationPolicyTest {
         String capped = NotificationPolicy.attachmentDetail(14, "FILE_NAME\t" + ninety, null, null);
         check(capped != null && capped.length() == 81 && capped.endsWith("\u2026"),
                 "Long detail is capped to 80 chars plus ellipsis");
+        StringBuilder seventyNineEmoji = new StringBuilder();
+        for (int i = 0; i < 79; i++) seventyNineEmoji.append('a');
+        seventyNineEmoji.append("\uD83D\uDE00");
+        String cappedEmoji = NotificationPolicy.attachmentDetail(14, "FILE_NAME\t" + seventyNineEmoji, null, null);
+        check(cappedEmoji != null && cappedEmoji.length() == 80 && cappedEmoji.endsWith("\u2026")
+                        && !Character.isHighSurrogate(cappedEmoji.charAt(cappedEmoji.length() - 2)),
+                "Drops boundary emoji cleanly instead of leaving an orphan high surrogate before ellipsis");
+        StringBuilder seventyEightEmoji = new StringBuilder();
+        for (int i = 0; i < 78; i++) seventyEightEmoji.append('a');
+        seventyEightEmoji.append("\uD83D\uDE00z");
+        String fitEmoji = NotificationPolicy.attachmentDetail(14, "FILE_NAME\t" + seventyEightEmoji, null, null);
+        check(fitEmoji != null && fitEmoji.length() == 81 && "\uD83D\uDE00\u2026".equals(fitEmoji.substring(78)),
+                "Preserves complete emoji surrogate pair when both units fit within limit");
         check("[File] a.pdf".equals(NotificationPolicy.formatAttachmentPlaceholder("[File]", "a.pdf"))
                         && "[File]".equals(NotificationPolicy.formatAttachmentPlaceholder("[File]", null)),
                 "Formats placeholder with or without detail");
@@ -408,9 +431,13 @@ public final class NotificationPolicyTest {
                         "Gangnam Station", 15, "[Location]", null, "Gangnam Station", "Seoul")),
                 "Replaces native chat-list location string with [Location] place");
         check("[File] Q4.pdf".equals(NotificationPolicy.resolveChatListMessage(
-                        "Alice sent a file.", 10000L, 1, 10500L,
+                        "Alice sent a file.", 10000L, 1, 10000L,
                         "", 14, "[File]", "FILE_NAME\tQ4.pdf", null, null)),
-                "Replaces native chat-list file string within timestamp tolerance");
+                "Replaces native chat-list file string on exact timestamp match");
+        check("new text".equals(NotificationPolicy.resolveChatListMessage(
+                        "new text", 10500L, 1, 10000L,
+                        "", 14, "[File]", "FILE_NAME\told.pdf", null, null)),
+                "Keeps native text when latest stored row timestamp differs even within 2 seconds");
         check("[Sticker]".equals(NotificationPolicy.resolveChatListMessage(
                         "You sent a sticker.", 10000L, 5, 10000L,
                         "", 0, "[Sticker]", null, null, null)),
@@ -571,21 +598,36 @@ public final class NotificationPolicyTest {
 
         check(NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB))
                         == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
-                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomBLegacy))
-                                == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
-                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomBLegacy))
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomB))
                                 == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM,
-                "Keeps single remaining regular chat summary regardless of legacy null account stamp");
+                "Keeps single remaining regular chat summary only when all children match active account");
 
-        check(NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomC))
+        check(NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomBLegacy))
                         == NotificationPolicy.SummaryAction.KEEP_GENERIC
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomBLegacy))
+                                == NotificationPolicy.SummaryAction.KEEP_GENERIC
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomC))
+                                == NotificationPolicy.SummaryAction.KEEP_GENERIC
                         && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(foreign))
                                 == NotificationPolicy.SummaryAction.KEEP_GENERIC
                         && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(openChat))
                                 == NotificationPolicy.SummaryAction.KEEP_GENERIC
                         && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.<NotificationPolicy.ActiveChild>asList((NotificationPolicy.ActiveChild) null))
                                 == NotificationPolicy.SummaryAction.KEEP_GENERIC,
-                "Falls back to generic summary for multiple rooms, foreign accounts, OpenChat, or null entries");
+                "Falls back to generic summary for unverified null accounts, multiple rooms, foreign accounts, OpenChat, or null entries");
+
+        check(NotificationPolicy.slotGenerationMatches(5L, 5L)
+                        && !NotificationPolicy.slotGenerationMatches(5L, 6L)
+                        && !NotificationPolicy.slotGenerationMatches(0L, 0L)
+                        && !NotificationPolicy.slotGenerationMatches(0L, 1L),
+                "Requires positive matching generation to commit a held notification slot");
+
+        check(NotificationPolicy.snapshotConsistent(5, "100", 5, "100")
+                        && !NotificationPolicy.snapshotConsistent(5, "100", 2, "103")
+                        && !NotificationPolicy.snapshotConsistent(5, "100", 2, "100")
+                        && !NotificationPolicy.snapshotConsistent(5, "100", 5, "101")
+                        && !NotificationPolicy.snapshotConsistent(5, "100", 0, "105"),
+                "Rejects partial-read, boundary-shift, or read-all snapshots after media loading");
 
         check(NotificationPolicy.canStageMediaPreview(true, true, true, 5L, 5L, "acc-1", "acc-1"),
                 "Allows media preview staging when settings, privacy, generation, and account match");
