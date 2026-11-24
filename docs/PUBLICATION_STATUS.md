@@ -1,16 +1,25 @@
-# Publication Status — 2026-11-23
+# Publication Status — 2026-11-24
 
-## Latest release (`v0.1.15-dev`)
+## Latest release (`v0.1.16-dev`)
 
 * **Repository**: https://github.com/gomjirak0803/line-notification-patches
-* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.15-dev
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.16-dev
 * **Add in Morphe Manager**: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45179405588 (success, 56s)
-* **Source commit**: `24b8d4f` (metadata commit: `fc2c525`)
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45332528762 (success, 1m 11s; `Run full Python test suite` gated before publish)
+* **Source commit**: `c52ba2a` (metadata commit: `854660c`)
 
-All 6 patches ship with `default = true` (`"default": true` in `patches-list.json`), so Morphe Manager applies the full suite without Expert mode while keeping every in-app switch in **Notification patch settings** initially disabled; legacy `in Korean` annotations were also removed from English docs and release notes. The published `line-notification-patches-0.1.15-dev.mpp` is `188,803` bytes with SHA-256 `fc8819928de86094aedf815cbff4281e3a0a572b58ee1bc720269257d2d1fe1f`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 18 ZIP entries against the local build (`a34d8102b3e08a415d79026dc167705c01df6f5f01b51e39151c699d54220c3a`) confirmed byte-for-byte parity across every executable class, DEX, extension, resource, and manifest entry (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The source archive SHA-256 is `ab40f3ccbed4cf2aec0ac762c820d9b37d975bfcde1ebec28fc16df7a62fb365`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-23T12:59:43"` and `"version": "0.1.15-dev"`, passing all 24 Python tests (including `tests/test_bundle_metadata.py`).
+Hardens held-pending notifications with `ChatKey(account, chat)` isolation and pre-notify active-account checks, replaces `clearSummaries()` with `Notifications.cancelChatNotifications` and `NotificationPolicy.resolveGroupSummary` (verified live on Galaxy S10e with two-room `Quiet 1h` summary rewriting and last-room cleanup), adds `mediaPreviewGeneration` under `PREVIEW_FILE_LOCK` with post-load re-checks, and gates both `scripts/build.py` and `release.yml` on the full 25-test Python suite (`test_*.py`). All 6 patches continue to ship with `"default": true` in `patches-list.json`. The published `line-notification-patches-0.1.16-dev.mpp` is `191,406` bytes with SHA-256 `2a917519d45a88917e6336111b7cb29c03cb3891352541b0a79f6afa2e88fd35`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 18 ZIP entries against the local build (`3874871e12eee720b78fbf9d3c71b2eb063afff081327da68e314f70301485fa`) confirmed byte-for-byte parity across every executable class, DEX, extension, resource, and manifest entry (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The source archive (`285,453` bytes, 75 files) SHA-256 is `dff4079e9bef27b7c727c5faa695451183f8e9df4b596be65cb49e3d4aaa428f`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-24T05:20:43"` and `"version": "0.1.16-dev"`, passing all 25 Python tests (including `tests/test_bundle_metadata.py`).
 
 ## Previous releases
+
+### `v0.1.15-dev` (2026-11-23)
+
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.15-dev
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45179405588 (success, 56s)
+* **Source commit**: `24b8d4f` (metadata commit: `fc2c525`)
+* **Published MPP** (`188,803` bytes): `fc8819928de86094aedf815cbff4281e3a0a572b58ee1bc720269257d2d1fe1f` (ZIP entry parity across all 18 entries with local build `a34d8102b3e08a415d79026dc167705c01df6f5f01b51e39151c699d54220c3a`, differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings).
+* **Source ZIP SHA-256**: `ab40f3ccbed4cf2aec0ac762c820d9b37d975bfcde1ebec28fc16df7a62fb365`.
+* `main/patches-bundle.json`: `"created_at": "2026-11-23T12:59:43"`, `"version": "0.1.15-dev"`.
 
 ### `v0.1.14-dev` (2026-11-23)
 
