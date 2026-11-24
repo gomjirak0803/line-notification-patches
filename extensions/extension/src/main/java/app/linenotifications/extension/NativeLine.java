@@ -52,6 +52,7 @@ final class NativeLine {
     private static final ExecutorService AVATAR_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Map<String, String> CHAT_LIST_CACHE = new LinkedHashMap<String, String>(64, 0.75f, true);
     private static final Object PREVIEW_FILE_LOCK = new Object();
+    private static volatile long mediaPreviewGeneration = 0L;
     private NativeLine() {}
 
     // Server ids bound the native read boundary, but are not necessarily chronological
@@ -483,14 +484,32 @@ final class NativeLine {
     }
 
     static void clearMediaPreviewCache(Context context) {
-        if (context == null) return;
         synchronized (PREVIEW_FILE_LOCK) {
+            mediaPreviewGeneration++;
+            if (context == null) return;
             File dir = new File(context.getCacheDir(), PREVIEW_DIR_REL);
             File[] files = dir.listFiles();
-            if (files == null) return;
-            for (File file : files) {
-                if (file.isFile()) file.delete();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile()) file.delete();
+                }
             }
+            if (dir.isDirectory()) dir.delete();
+        }
+    }
+
+    private static boolean mediaPreviewStillAllowed(String account, long startGen) {
+        try {
+            return NotificationPolicy.canStageMediaPreview(
+                    Settings.enabled(Settings.INFO),
+                    Settings.enabled(Settings.INFO_MEDIA_PREVIEW),
+                    previewsAllowed(),
+                    startGen,
+                    mediaPreviewGeneration,
+                    account,
+                    account());
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
         }
     }
 
@@ -507,12 +526,19 @@ final class NativeLine {
                 || candidates == null || candidates.isEmpty()) {
             return result;
         }
-        File dir = new File(context.getCacheDir(), PREVIEW_DIR_REL);
+        long startGen;
         synchronized (PREVIEW_FILE_LOCK) {
-            if (!dir.isDirectory() && !dir.mkdirs()) return result;
+            startGen = mediaPreviewGeneration;
+            if (!Settings.mediaPreviewAllowed()) return result;
         }
+        if (!mediaPreviewStillAllowed(account, startGen)) return result;
+        File dir = new File(context.getCacheDir(), PREVIEW_DIR_REL);
         long deadline = System.currentTimeMillis() + MEDIA_TOTAL_BUDGET_MS;
         for (int i = messages.size() - 1; i >= 0 && result.size() < MAX_MEDIA_PREVIEWS; i--) {
+            if (!mediaPreviewStillAllowed(account, startGen)) {
+                result.clear();
+                return result;
+            }
             NotificationPolicy.Message msg = messages.get(i);
             MediaCandidate cand = candidates.get(msg.id);
             if (cand == null || !NotificationPolicy.isPreviewableMediaType(cand.attachmentType)) continue;
@@ -523,6 +549,10 @@ final class NativeLine {
             File staged = new File(dir, name);
             boolean ready;
             synchronized (PREVIEW_FILE_LOCK) {
+                if (!Settings.mediaPreviewAllowed() || mediaPreviewGeneration != startGen) {
+                    result.clear();
+                    return result;
+                }
                 ready = staged.isFile() && staged.length() > 0L;
                 if (ready) staged.setLastModified(System.currentTimeMillis());
             }
@@ -533,7 +563,12 @@ final class NativeLine {
                         : resolvePhotoOrVideoBitmap(context, chat, msg.id, cand, remainingMs);
                 if (bitmap != null) {
                     try {
+                        boolean allowedOutside = mediaPreviewStillAllowed(account, startGen);
                         synchronized (PREVIEW_FILE_LOCK) {
+                            if (!allowedOutside || !Settings.mediaPreviewAllowed() || mediaPreviewGeneration != startGen) {
+                                result.clear();
+                                return result;
+                            }
                             if (!dir.isDirectory() && !dir.mkdirs()) continue;
                             ready = writeStagedBitmap(staged, bitmap, isSticker);
                         }
@@ -543,13 +578,22 @@ final class NativeLine {
                 }
             }
             if (ready) {
+                if (!mediaPreviewStillAllowed(account, startGen)) {
+                    result.clear();
+                    return result;
+                }
                 Uri contentUri = contentUriForStagedFile(context, staged);
                 if (contentUri != null) result.put(msg.id, new MediaPreview(mime, contentUri));
             }
         }
         synchronized (PREVIEW_FILE_LOCK) {
+            if (!Settings.mediaPreviewAllowed() || mediaPreviewGeneration != startGen) {
+                result.clear();
+                return result;
+            }
             prunePreviewDir(dir);
         }
+        if (!mediaPreviewStillAllowed(account, startGen)) result.clear();
         return result;
     }
 

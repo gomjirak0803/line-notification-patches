@@ -50,15 +50,7 @@ final class SnoozeActions {
             if (account == null || !NativeLine.regularChat(chat) || !account.equals(NativeLine.account())) return true;
             Settings.snooze(account, chat, NotificationPolicy.SNOOZE_1H_MILLIS);
             NotificationManager manager = context.getSystemService(NotificationManager.class);
-            if (manager != null) {
-                for (StatusBarNotification n : manager.getActiveNotifications()) {
-                    Bundle extras = n.getNotification().extras;
-                    if (extras != null && chat.equals(extras.getString("line.chat.id"))) {
-                        manager.cancel(n.getTag(), n.getId());
-                    }
-                }
-                Notifications.clearSummaries(manager);
-            }
+            Notifications.cancelChatNotifications(manager, account, chat);
             trace("snooze: 1h applied");
             MAIN.post(() -> {
                 try {

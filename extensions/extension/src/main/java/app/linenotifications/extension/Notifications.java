@@ -13,7 +13,10 @@ import android.service.notification.StatusBarNotification;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import app.linenotifications.extension.core.NotificationPolicy;
@@ -21,7 +24,7 @@ import app.linenotifications.extension.core.NotificationPolicy;
 /** Called only from the verified native notification publish path. */
 public final class Notifications {
     private static final String CHANNEL = "line_notification_patches.silent.v1";
-    private static final String ACCOUNT = "line_notification_patches.account";
+    static final String ACCOUNT = "line_notification_patches.account";
     private static final String ORIGINAL_CHANNEL = "line_notification_patches.orig_channel";
     private static final String BYPASS_ALERTED = "line_notification_patches.bypass_alerted";
     private static final String ESCALATE_ALERT = "line_notification_patches.escalate_alert";
@@ -33,17 +36,19 @@ public final class Notifications {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final ExecutorService REFRESH_WORKER = Executors.newSingleThreadExecutor();
     private static final Map<NotificationPolicy.ChatKey, Runnable> DEFERRED = new HashMap<>();
-    private static final Map<String, List<PendingPost>> PENDING_POSTS = new HashMap<>();
-    private static final Map<String, Runnable> PENDING_TIMEOUTS = new HashMap<>();
+    private static final Map<NotificationPolicy.ChatKey, List<PendingPost>> PENDING_POSTS = new HashMap<>();
+    private static final Map<NotificationPolicy.ChatKey, Runnable> PENDING_TIMEOUTS = new HashMap<>();
     private Notifications() {}
 
     private static final class PendingPost {
+        final String account;
         final NotificationManager manager;
         final String tag;
         final int id;
         final Notification original;
 
-        PendingPost(NotificationManager manager, String tag, int id, Notification original) {
+        PendingPost(String account, NotificationManager manager, String tag, int id, Notification original) {
+            this.account = account;
             this.manager = manager;
             this.tag = tag;
             this.id = id;
@@ -92,12 +97,23 @@ public final class Notifications {
     }
 
     public static synchronized void post(NotificationManager manager, String tag, int id, Notification original) {
-        postInternal(manager, tag, id, original, true);
+        postInternal(manager, tag, id, original, true, null);
     }
 
     private static void postInternal(NotificationManager manager, String tag, int id,
-                                     Notification original, boolean allowHold) {
+                                     Notification original, boolean allowHold, String expectedAccount) {
         if (original == null) return;
+        if (expectedAccount != null) {
+            try {
+                if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())) {
+                    trace("post: pending dropped on account change");
+                    return;
+                }
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                trace("post: pending dropped without active account");
+                return;
+            }
+        }
         String chat = original.extras == null ? null : original.extras.getString("line.chat.id");
         Notification notification = original;
         try {
@@ -110,7 +126,8 @@ public final class Notifications {
             }
         }
         if (notification == null) {
-            removePendingSlot(chat, tag, id);
+            if (expectedAccount != null) clearPendingChatLocked(expectedAccount, chat);
+            else removePendingSlot(chat, tag, id);
             trace("post: suppressed");
             manager.cancel(tag, id);
             return;
@@ -121,10 +138,28 @@ public final class Notifications {
             notification.extras.remove(HOLD_PENDING);
             notification.extras.remove(ESCALATE_ALERT);
         }
+        String stampedAccount = notification.extras == null ? null : notification.extras.getString(ACCOUNT);
         if (allowHold && holdPending && isMessage(original) && NativeLine.regularChat(chat)) {
-            queuePending(chat, manager, tag, id, original);
-            trace("post: held awaiting local save");
+            if (stampedAccount != null && !stampedAccount.isEmpty()) {
+                purgeForeignPendingLocked(stampedAccount);
+                queuePending(new NotificationPolicy.ChatKey(stampedAccount, chat), manager, tag, id, original);
+                trace("post: held awaiting local save");
+            } else {
+                trace("post: pending dropped without active account");
+            }
             return;
+        }
+        if (expectedAccount != null) {
+            try {
+                if (!NotificationPolicy.sameAccount(expectedAccount, NativeLine.account())
+                        || (stampedAccount != null && !expectedAccount.equals(stampedAccount))) {
+                    trace("post: pending dropped on account change");
+                    return;
+                }
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                trace("post: pending dropped without active account");
+                return;
+            }
         }
         if (allowHold && chat != null) removePendingSlot(chat, tag, id);
         manager.notify(tag, id, notification);
@@ -134,27 +169,53 @@ public final class Notifications {
 
     private static void removePendingSlot(String chat, String tag, int id) {
         if (chat == null) return;
-        List<PendingPost> list = PENDING_POSTS.get(chat);
-        if (list == null) return;
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).sameSlot(tag, id)) {
-                list.remove(i);
-                break;
+        Iterator<Map.Entry<NotificationPolicy.ChatKey, List<PendingPost>>> it = PENDING_POSTS.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<NotificationPolicy.ChatKey, List<PendingPost>> entry = it.next();
+            NotificationPolicy.ChatKey key = entry.getKey();
+            if (!chat.equals(key.chatId)) continue;
+            List<PendingPost> list = entry.getValue();
+            for (int i = 0; i < list.size(); i++) {
+                if (list.get(i).sameSlot(tag, id)) {
+                    list.remove(i);
+                    break;
+                }
             }
-        }
-        if (list.isEmpty()) {
-            PENDING_POSTS.remove(chat);
-            Runnable timeout = PENDING_TIMEOUTS.remove(chat);
-            if (timeout != null) MAIN.removeCallbacks(timeout);
+            if (list.isEmpty()) {
+                it.remove();
+                Runnable timeout = PENDING_TIMEOUTS.remove(key);
+                if (timeout != null) MAIN.removeCallbacks(timeout);
+            }
         }
     }
 
-    private static void queuePending(String chat, NotificationManager manager, String tag,
-                                     int id, Notification original) {
-        List<PendingPost> list = PENDING_POSTS.get(chat);
+    private static void clearPendingChatLocked(String account, String chat) {
+        if (account == null || account.isEmpty() || !NativeLine.regularChat(chat)) return;
+        NotificationPolicy.ChatKey key = new NotificationPolicy.ChatKey(account, chat);
+        PENDING_POSTS.remove(key);
+        Runnable timeout = PENDING_TIMEOUTS.remove(key);
+        if (timeout != null) MAIN.removeCallbacks(timeout);
+    }
+
+    private static void purgeForeignPendingLocked(String activeAccount) {
+        if (activeAccount == null || activeAccount.isEmpty() || PENDING_POSTS.isEmpty()) return;
+        Iterator<Map.Entry<NotificationPolicy.ChatKey, List<PendingPost>>> it = PENDING_POSTS.entrySet().iterator();
+        while (it.hasNext()) {
+            NotificationPolicy.ChatKey key = it.next().getKey();
+            if (!NotificationPolicy.sameAccount(key.accountId, activeAccount)) {
+                it.remove();
+                Runnable timeout = PENDING_TIMEOUTS.remove(key);
+                if (timeout != null) MAIN.removeCallbacks(timeout);
+            }
+        }
+    }
+
+    private static void queuePending(NotificationPolicy.ChatKey key, NotificationManager manager,
+                                     String tag, int id, Notification original) {
+        List<PendingPost> list = PENDING_POSTS.get(key);
         if (list == null) {
             list = new ArrayList<>();
-            PENDING_POSTS.put(chat, list);
+            PENDING_POSTS.put(key, list);
         }
         for (int i = 0; i < list.size(); i++) {
             if (list.get(i).sameSlot(tag, id)) {
@@ -162,32 +223,45 @@ public final class Notifications {
                 break;
             }
         }
-        list.add(new PendingPost(manager, tag, id, original));
-        if (!PENDING_TIMEOUTS.containsKey(chat)) {
+        list.add(new PendingPost(key.accountId, manager, tag, id, original));
+        if (!PENDING_TIMEOUTS.containsKey(key)) {
             Runnable timeout = new Runnable() {
                 @Override public void run() {
                     REFRESH_WORKER.execute(() -> {
                         synchronized (Notifications.class) {
-                            if (PENDING_TIMEOUTS.get(chat) != this) return;
-                            PENDING_TIMEOUTS.remove(chat);
-                            flushPendingLocked(chat, true);
+                            if (PENDING_TIMEOUTS.get(key) != this) return;
+                            PENDING_TIMEOUTS.remove(key);
+                            flushPendingLocked(key, true);
                         }
                     });
                 }
             };
-            PENDING_TIMEOUTS.put(chat, timeout);
+            PENDING_TIMEOUTS.put(key, timeout);
             MAIN.postDelayed(timeout, PENDING_HOLD_MS);
         }
     }
 
-    private static void flushPendingLocked(String chat, boolean timedOut) {
-        Runnable timeout = PENDING_TIMEOUTS.remove(chat);
+    private static void flushPendingLocked(NotificationPolicy.ChatKey key, boolean timedOut) {
+        Runnable timeout = PENDING_TIMEOUTS.remove(key);
         if (timeout != null) MAIN.removeCallbacks(timeout);
-        List<PendingPost> list = PENDING_POSTS.remove(chat);
+        List<PendingPost> list = PENDING_POSTS.remove(key);
         if (list == null || list.isEmpty()) return;
+        String currentAccount;
+        try {
+            currentAccount = NativeLine.account();
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            trace("post: pending dropped without active account");
+            return;
+        }
+        if (!NotificationPolicy.sameAccount(key.accountId, currentAccount)) {
+            trace("post: pending dropped on account change");
+            return;
+        }
         trace(timedOut ? "post: pending timeout flushed" : "post: flushed after local save");
         for (PendingPost item : list) {
-            postInternal(item.manager, item.tag, item.id, item.original, false);
+            if (NotificationPolicy.sameAccount(item.account, currentAccount)) {
+                postInternal(item.manager, item.tag, item.id, item.original, false, item.account);
+            }
         }
     }
 
@@ -203,7 +277,13 @@ public final class Notifications {
     /** Native save completion only: flush held posts and refresh active notifications. */
     public static synchronized void onMessageStored(String chat) {
         if (!NativeLine.regularChat(chat)) return;
-        flushPendingLocked(chat, false);
+        try {
+            String account = NativeLine.account();
+            purgeForeignPendingLocked(account);
+            flushPendingLocked(new NotificationPolicy.ChatKey(account, chat), false);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            trace("local save: pending flush skipped without active account");
+        }
         if (!needsPostSaveRefresh()) return;
         refreshActive(chat, false);
         deferRefresh(chat);
@@ -435,11 +515,25 @@ public final class Notifications {
                     Map<String, android.graphics.drawable.Icon> icons = NativeLine.senderIcons(
                             Settings.context(), account, !chat.startsWith("u"), original, decision.recentMessages);
                     Map<String, NativeLine.MediaPreview> mediaPreviews = null;
-                    if (Settings.enabled(Settings.INFO_MEDIA_PREVIEW)) {
+                    if (Settings.mediaPreviewAllowed()) {
                         mediaPreviews = NativeLine.mediaPreviews(
                                 Settings.context(), account, chat, original, decision.recentMessages, recent.media);
-                        if (!mediaPreviews.isEmpty()) trace("media: previews attached");
-                        else if (!recent.media.isEmpty()) trace("media: no preview resolved");
+                        NativeLine.Chat afterMedia = NativeLine.chat(chat);
+                        if (!account.equals(NativeLine.account()) || afterMedia == null || afterMedia.unread == 0
+                                || !NativeLine.previewsAllowed()) {
+                            return null;
+                        }
+                        if (!Settings.enabled(Settings.INFO)) {
+                            return builder.build();
+                        }
+                        if (!Settings.mediaPreviewAllowed()) {
+                            mediaPreviews = null;
+                            trace("media: preview disabled during load");
+                        } else if (!mediaPreviews.isEmpty()) {
+                            trace("media: previews attached");
+                        } else if (!recent.media.isEmpty()) {
+                            trace("media: no preview resolved");
+                        }
                     }
                     return ConversationPreview.apply(
                             builder, snapshot.chat, name, state.unread, decision.recentMessages, icons, mediaPreviews);
@@ -603,11 +697,135 @@ public final class Notifications {
         return result.toArray(new Notification.Action[0]);
     }
 
-    static void clearSummaries(NotificationManager manager) {
-        for (StatusBarNotification n : manager.getActiveNotifications()) {
-            if ((n.getNotification().flags & Notification.FLAG_GROUP_SUMMARY) != 0 && isMessage(n.getNotification())) {
-                manager.cancel(n.getTag(), n.getId());
+    static synchronized void cancelChatNotifications(NotificationManager manager, String account, String chat) {
+        if (chat == null) return;
+        cancelChatNotifications(manager, account, java.util.Collections.singleton(chat));
+    }
+
+    static synchronized void cancelChatNotifications(NotificationManager manager, String account, Set<String> targetChats) {
+        if (manager == null || account == null || account.isEmpty() || targetChats == null || targetChats.isEmpty()) return;
+        for (String chat : targetChats) {
+            clearPendingChatLocked(account, chat);
+        }
+        StatusBarNotification[] active = manager.getActiveNotifications();
+        if (active == null || active.length == 0) return;
+        Set<String> affectedGroups = new HashSet<>();
+        Set<String> canceledKeys = new HashSet<>();
+        boolean cancelUngroupedTargetSummaries = false;
+        for (StatusBarNotification sbn : active) {
+            Notification n = sbn.getNotification();
+            if (n == null || n.extras == null) continue;
+            String nChat = n.extras.getString("line.chat.id");
+            if (nChat == null || !targetChats.contains(nChat)) continue;
+            String nAccount = n.extras.getString(ACCOUNT);
+            if (nAccount != null && !account.equals(nAccount)) continue;
+            if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) {
+                String group = n.getGroup();
+                if (group != null) affectedGroups.add(group);
+                else cancelUngroupedTargetSummaries = true;
+            } else {
+                String group = n.getGroup();
+                if (group != null) affectedGroups.add(group);
+                canceledKeys.add(sbn.getKey());
+                manager.cancel(sbn.getTag(), sbn.getId());
             }
+        }
+        if (affectedGroups.isEmpty() && !cancelUngroupedTargetSummaries) return;
+        for (StatusBarNotification sbn : active) {
+            Notification summary = sbn.getNotification();
+            if (summary == null || (summary.flags & Notification.FLAG_GROUP_SUMMARY) == 0 || !isMessage(summary)) continue;
+            String summaryAccount = summary.extras.getString(ACCOUNT);
+            if (summaryAccount != null && !account.equals(summaryAccount)) continue;
+            String group = summary.getGroup();
+            if (group == null) {
+                String summaryChat = summary.extras.getString("line.chat.id");
+                if (cancelUngroupedTargetSummaries && summaryChat != null && targetChats.contains(summaryChat)) {
+                    manager.cancel(sbn.getTag(), sbn.getId());
+                }
+                continue;
+            }
+            if (!affectedGroups.contains(group)) continue;
+            List<NotificationPolicy.ActiveChild> remainingInfo = new ArrayList<>();
+            StatusBarNotification latestRemaining = null;
+            for (StatusBarNotification candidate : active) {
+                Notification child = candidate.getNotification();
+                if (child == null || (child.flags & Notification.FLAG_GROUP_SUMMARY) != 0) continue;
+                if (!group.equals(child.getGroup()) || canceledKeys.contains(candidate.getKey())) continue;
+                boolean regular = isMessage(child) && child.extras != null
+                        && NativeLine.regularChat(child.extras.getString("line.chat.id"))
+                        && !child.extras.getBoolean("line.square.notification");
+                String childAccount = child.extras == null ? null : child.extras.getString(ACCOUNT);
+                String childChat = child.extras == null ? null : child.extras.getString("line.chat.id");
+                remainingInfo.add(new NotificationPolicy.ActiveChild(childAccount, childChat, regular));
+                if (latestRemaining == null || candidate.getPostTime() > latestRemaining.getPostTime()) {
+                    latestRemaining = candidate;
+                }
+            }
+            NotificationPolicy.SummaryAction action = NotificationPolicy.resolveGroupSummary(account, remainingInfo);
+            if (action == NotificationPolicy.SummaryAction.CANCEL) {
+                manager.cancel(sbn.getTag(), sbn.getId());
+            } else {
+                rebuildSummaryWithoutCanceledChat(manager, sbn, summary, account, action, latestRemaining);
+            }
+        }
+    }
+
+    private static void rebuildSummaryWithoutCanceledChat(NotificationManager manager, StatusBarNotification sbn,
+                                                          Notification summary, String account,
+                                                          NotificationPolicy.SummaryAction action,
+                                                          StatusBarNotification latestRemaining) {
+        try {
+            boolean previewsAllowed;
+            try {
+                previewsAllowed = NativeLine.previewsAllowed();
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                previewsAllowed = false;
+            }
+            String newMessage = Strings.get("line_notify_new_message", "You have a new message.");
+            Notification remainingChild = latestRemaining == null ? null : latestRemaining.getNotification();
+            CharSequence title = "LINE";
+            CharSequence text = newMessage;
+            if (action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM && previewsAllowed
+                    && remainingChild != null && remainingChild.extras != null) {
+                title = remainingChild.extras.getCharSequence(Notification.EXTRA_TITLE, "LINE");
+                text = remainingChild.extras.getCharSequence(Notification.EXTRA_TEXT, newMessage);
+            }
+            String remainingChat = remainingChild == null || remainingChild.extras == null
+                    ? null : remainingChild.extras.getString("line.chat.id");
+            String remainingMessage = remainingChild == null || remainingChild.extras == null
+                    ? null : remainingChild.extras.getString("line.message.id");
+            String remainingShortcut = action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
+                    && remainingChild != null ? remainingChild.getShortcutId() : null;
+            Notification.Builder builder = Notification.Builder.recoverBuilder(Settings.context(), summary)
+                    .setOnlyAlertOnce(true).setShortcutId(remainingShortcut).setActions(new Notification.Action[0]);
+            if (action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
+                    && remainingChild != null && remainingChild.contentIntent != null) {
+                builder.setContentIntent(remainingChild.contentIntent);
+            }
+            Notification rebuilt = plainSummary(builder, title, text);
+            // Android's recoverBuilder overlays the original mN.extras during build(); mutate built extras after.
+            rebuilt.extras.putString(ACCOUNT, account);
+            if (remainingChat != null && !remainingChat.isEmpty()) rebuilt.extras.putString("line.chat.id", remainingChat);
+            else rebuilt.extras.remove("line.chat.id");
+            if (remainingMessage != null && !remainingMessage.isEmpty()) rebuilt.extras.putString("line.message.id", remainingMessage);
+            else rebuilt.extras.remove("line.message.id");
+            rebuilt.extras.remove(HOLD_PENDING);
+            rebuilt.extras.remove(ESCALATE_ALERT);
+            if (summary.publicVersion != null) {
+                Notification pub = plainSummary(
+                        Notification.Builder.recoverBuilder(Settings.context(), summary.publicVersion)
+                                .setShortcutId(null).setActions(new Notification.Action[0]),
+                        "LINE", newMessage);
+                pub.extras.remove("line.chat.id");
+                pub.extras.remove("line.message.id");
+                rebuilt.publicVersion = pub;
+            }
+            rebuilt.flags |= Notification.FLAG_ONLY_ALERT_ONCE;
+            manager.notify(sbn.getTag(), sbn.getId(), rebuilt);
+            trace(action == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
+                    ? "summary: kept remaining room" : "summary: kept multi-room");
+        } catch (RuntimeException ignored) {
+            trace("summary: rebuild failed");
         }
     }
 }

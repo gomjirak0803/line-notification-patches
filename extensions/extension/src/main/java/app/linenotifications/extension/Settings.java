@@ -1,6 +1,7 @@
 package app.linenotifications.extension;
 
 import android.app.AlertDialog;
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -11,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import android.util.Base64;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import app.linenotifications.extension.core.NotificationPolicy;
 
 /** Runtime switches are opt-in and persist only on this device. */
@@ -58,6 +61,7 @@ public final class Settings {
         return NotificationPolicy.parseKeywords(prefs().getString(KEYWORDS, ""));
     }
     static boolean keywordBypassActive() { return enabled(KEYWORD_BYPASS) && !keywords().isEmpty(); }
+    static boolean mediaPreviewAllowed() { return enabled(INFO) && enabled(INFO_MEDIA_PREVIEW); }
     static void setKeywords(String raw) {
         String normalized = NotificationPolicy.serializeKeywords(NotificationPolicy.parseKeywords(raw));
         prefs().edit().putString(KEYWORDS, normalized).apply();
@@ -155,13 +159,20 @@ public final class Settings {
         if (!enabled(SILENT) || intent == null || !"jp.naver.line.android.access.remote.action.MUTE_CURRENT_CHAT_ACTION".equals(intent.getAction())) return false;
         String chat = intent.getStringExtra("chatId");
         if (!NativeLine.regularChat(chat)) return false;
+        String account;
+        try {
+            account = NativeLine.account();
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return true;
+        }
         ChatNotifications.change(context, chat, ChatNotifications.QUIET, null, () -> {
-            NotificationManager manager = context.getSystemService(NotificationManager.class);
-            for (StatusBarNotification n : manager.getActiveNotifications()) {
-                android.os.Bundle extras = n.getNotification().extras;
-                if (extras != null && chat.equals(extras.getString("line.chat.id"))) manager.cancel(n.getTag(), n.getId());
+            try {
+                if (!account.equals(NativeLine.account())) return;
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                return;
             }
-            Notifications.clearSummaries(manager);
+            NotificationManager manager = context.getSystemService(NotificationManager.class);
+            Notifications.cancelChatNotifications(manager, account, chat);
         });
         return true;
     }
@@ -180,11 +191,7 @@ public final class Settings {
         editor.apply();
         if (mute) {
             NotificationManager manager = context().getSystemService(NotificationManager.class);
-            for (StatusBarNotification n : manager.getActiveNotifications()) {
-                android.os.Bundle extras = n.getNotification().extras;
-                if (extras != null && chat.equals(extras.getString("line.chat.id"))) manager.cancel(n.getTag(), n.getId());
-            }
-            Notifications.clearSummaries(manager);
+            Notifications.cancelChatNotifications(manager, account, chat);
         }
     }
 
@@ -192,12 +199,21 @@ public final class Settings {
         try {
             String account = NativeLine.account();
             NotificationManager manager = context().getSystemService(NotificationManager.class);
+            if (manager == null) return;
+            Set<String> hiddenChats = new HashSet<>();
             for (StatusBarNotification n : manager.getActiveNotifications()) {
-                android.os.Bundle extras = n.getNotification().extras;
-                String chat = extras == null ? null : extras.getString("line.chat.id");
-                if (NativeLine.regularChat(chat) && fullyMuted(account, chat)) manager.cancel(n.getTag(), n.getId());
+                Notification notif = n.getNotification();
+                if (notif == null || notif.extras == null || (notif.flags & Notification.FLAG_GROUP_SUMMARY) != 0) continue;
+                String chat = notif.extras.getString("line.chat.id");
+                String nAccount = notif.extras.getString(Notifications.ACCOUNT);
+                if ((nAccount == null || account.equals(nAccount))
+                        && NativeLine.regularChat(chat) && fullyMuted(account, chat)) {
+                    hiddenChats.add(chat);
+                }
             }
-            Notifications.clearSummaries(manager);
+            if (!hiddenChats.isEmpty()) {
+                Notifications.cancelChatNotifications(manager, account, hiddenChats);
+            }
         } catch (ReflectiveOperationException | RuntimeException ignored) { }
     }
     public static int titleId() { return context().getResources().getIdentifier("line_notify_settings", "string", context().getPackageName()); }

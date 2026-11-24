@@ -1,5 +1,20 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.1.16-dev` Pending account isolation, group summary preservation & CI test coverage — 2026-11-24
+
+Isolated held pending notifications by `ChatKey(account, chat)` with pre-transform and pre-notify active-account checks, replaced global `clearSummaries()` with `Notifications.cancelChatNotifications` + `NotificationPolicy.resolveGroupSummary` (updating `shortcutId`, `line.chat.id`, `line.message.id`, title/text, and `publicVersion` after Android `recoverBuilder.build()`), added `mediaPreviewGeneration` under `PREVIEW_FILE_LOCK` with post-load re-checks, and gated both `scripts/build.py` and `.github/workflows/release.yml` on the full 25-test Python suite (`test_*.py`).
+
+* **Automated checks**: 215 `NotificationPolicy` assertions, 25 Python unit tests (`test_bundle_metadata.py`, `test_i18n_resources.py`, `test_line_test_sender.py`, `test_message_history.py`), 2,078 static APK contracts (ARM64), 2,078 (Universal), 2,016 (`Mark as read`-only); `morphe-desktop list-patches` verified `Enabled: true` on all 6 patches.
+* **SHA-256**: local `0.1.16-dev` bundle `3874871e12eee720b78fbf9d3c71b2eb063afff081327da68e314f70301485fa`; S10e-tested signed APK `c4fed6aae60fac9658a8a934720d8ee7be81687811711a1d9751eea8d8cc4c8c` *(built from identical DEX and patch code immediately prior to bumping `VERSION` from `0.1.15-dev` to `0.1.16-dev`)*.
+
+### Physical S10e (`SM-G970N`, Android 12 / API 31 / One UI 4.1) verification
+| Feature / Case | Result |
+| --- | --- |
+| Held pending local-save flush (`HOLD_PENDING`) | Location push queued (`post: held awaiting local save`) and flushed cleanly after DB commit (`post: flushed after local save`); 0 `AndroidRuntime:E` crashes |
+| Two-room `Quiet 1h` summary preservation (Room A 1:1 + Room B group) | Snoozing Room B (`568452307`) canceled only Room B, kept snoozed Room A (`2028475556`) on `silent.v1`, and rewrote summary `16880000` (`summary: kept remaining room`) so `shortcut`, `line.chat.id`, `line.message.id`, title, and text matched Room A with 0 leftover Room B metadata |
+| Last-room `Quiet 1h` summary cleanup | Snoozing remaining Room A cleared both child `2028475556` and group summary `16880000` (`0` active test/summary notifications remaining) |
+| Snoozed room follow-up & media preview staging | Follow-up message to snoozed Room A routed silently to `line_notification_patches.silent.v1` (`silent: snoozed 1h`); Room B sticker preview staged via `LineCommonFileProvider` (`media: previews attached`) with lock/generation guard enabled |
+
 ## `0.1.15-dev` All 6 patches enabled by default — 2026-11-23
 
 All 6 patches now ship with `default = true` (Morphe Manager no longer requires Expert mode to apply the full suite; every in-app switch in **Notification patch settings** still defaults to OFF), and English documentation and release notes were cleaned of legacy `in Korean` annotations. Runtime extension DEX behavior is unchanged from S10e-verified `0.1.14-dev`.

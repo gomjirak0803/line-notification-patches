@@ -34,6 +34,19 @@ class BundleMetadataTest(unittest.TestCase):
         source = (ROOT / "scripts/prepare_release.py").read_text(encoding="utf-8")
         self.assertIn("docs/RELEASE_NOTES.md", source)
 
+    def test_ci_and_build_run_full_python_test_suite(self):
+        build_src = (ROOT / "scripts/build.py").read_text(encoding="utf-8")
+        self.assertIn('"test_*.py"', build_src)
+        self.assertNotIn("test_message_history.py", build_src)
+
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        prepare_idx = workflow.find("python scripts/prepare_release.py")
+        test_idx = workflow.find('python -m unittest discover -s tests -p "test_*.py"')
+        publish_idx = workflow.find("gh release create")
+        self.assertGreaterEqual(prepare_idx, 0)
+        self.assertGreater(test_idx, prepare_idx)
+        self.assertGreater(publish_idx, test_idx)
+
 
 if __name__ == "__main__":
     unittest.main()

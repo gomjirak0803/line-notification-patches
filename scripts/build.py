@@ -15,7 +15,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / ".tools"
 BUILD = ROOT / "build" / "standalone"
-VERSION = "0.1.15-dev"
+VERSION = "0.1.16-dev"
 
 
 def run(args):
@@ -62,7 +62,7 @@ def build(test_only=False):
     core = ROOT / "extensions/extension/src/main/java/app/linenotifications/extension/core/NotificationPolicy.java"
     run([javac, "-encoding", "UTF-8", "--release", "8", "-d", tests, core, ROOT / "tests/core/NotificationPolicyTest.java"])
     run([java, "-cp", tests, "NotificationPolicyTest"])
-    run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_message_history.py"])
+    run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"])
     if test_only:
         return
     extensions = BUILD / "extension-classes"

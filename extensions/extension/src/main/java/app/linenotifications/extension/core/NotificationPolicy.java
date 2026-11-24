@@ -735,6 +735,54 @@ public final class NotificationPolicy {
         return sb.length() == 0 ? null : sb.toString();
     }
 
+    public enum SummaryAction { CANCEL, KEEP_SINGLE_ROOM, KEEP_GENERIC }
+
+    public static final class ActiveChild {
+        public final String accountId;
+        public final String chatId;
+        public final boolean regularMessage;
+
+        public ActiveChild(String accountId, String chatId, boolean regularMessage) {
+            this.accountId = accountId;
+            this.chatId = chatId;
+            this.regularMessage = regularMessage;
+        }
+    }
+
+    /** Returns true when an expected non-empty account ID still matches the active account. */
+    public static boolean sameAccount(String expectedAccount, String activeAccount) {
+        return expectedAccount != null && !expectedAccount.isEmpty() && expectedAccount.equals(activeAccount);
+    }
+
+    /** Decides whether a group summary should be canceled or rebuilt after removing one chat. */
+    public static SummaryAction resolveGroupSummary(String activeAccount, List<ActiveChild> remainingChildren) {
+        if (remainingChildren == null || remainingChildren.isEmpty()) return SummaryAction.CANCEL;
+        String singleChat = null;
+        for (ActiveChild child : remainingChildren) {
+            if (child == null || !child.regularMessage || child.chatId == null || child.chatId.isEmpty()) {
+                return SummaryAction.KEEP_GENERIC;
+            }
+            if (child.accountId != null && !sameAccount(activeAccount, child.accountId)) {
+                return SummaryAction.KEEP_GENERIC;
+            }
+            if (singleChat == null) {
+                singleChat = child.chatId;
+            } else if (!singleChat.equals(child.chatId)) {
+                return SummaryAction.KEEP_GENERIC;
+            }
+        }
+        return singleChat != null ? SummaryAction.KEEP_SINGLE_ROOM : SummaryAction.KEEP_GENERIC;
+    }
+
+    /** Returns true only when settings, privacy, cache generation, and account all remain valid. */
+    public static boolean canStageMediaPreview(boolean moreChatInfoEnabled, boolean mediaPreviewEnabled,
+                                                boolean previewsAllowed, long startGeneration,
+                                                long currentGeneration, String expectedAccount,
+                                                String activeAccount) {
+        return moreChatInfoEnabled && mediaPreviewEnabled && previewsAllowed
+                && startGeneration == currentGeneration && sameAccount(expectedAccount, activeAccount);
+    }
+
     private static String requiredId(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.trim().isEmpty()) throw new IllegalArgumentException(name + " is empty");

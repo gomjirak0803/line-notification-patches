@@ -37,6 +37,7 @@ public final class NotificationPolicyTest {
         messageCountCases();
         mediaPreviewCases();
         actionLayoutAndSnoozeCases();
+        accountSummaryAndMediaGuardCases();
         System.out.println("NotificationPolicy: " + assertions + " assertions passed");
     }
 
@@ -547,6 +548,54 @@ public final class NotificationPolicyTest {
                         && !NotificationPolicy.isSnoozeActive(1000L, 1000L)
                         && NotificationPolicy.isSnoozeActive(1001L, 1000L),
                 "Checks temporary snooze deadline exclusivity");
+    }
+
+    private static void accountSummaryAndMediaGuardCases() {
+        check(NotificationPolicy.sameAccount("acc-1", "acc-1")
+                        && !NotificationPolicy.sameAccount("acc-1", "acc-2")
+                        && !NotificationPolicy.sameAccount("acc-1", null)
+                        && !NotificationPolicy.sameAccount(null, "acc-1")
+                        && !NotificationPolicy.sameAccount("", ""),
+                "Verifies non-empty exact account match");
+
+        check(NotificationPolicy.resolveGroupSummary("acc-1", null) == NotificationPolicy.SummaryAction.CANCEL
+                        && NotificationPolicy.resolveGroupSummary("acc-1",
+                                Collections.<NotificationPolicy.ActiveChild>emptyList()) == NotificationPolicy.SummaryAction.CANCEL,
+                "Cancels group summary when no child notifications remain");
+
+        NotificationPolicy.ActiveChild roomB = new NotificationPolicy.ActiveChild("acc-1", "chat-b", true);
+        NotificationPolicy.ActiveChild roomBLegacy = new NotificationPolicy.ActiveChild(null, "chat-b", true);
+        NotificationPolicy.ActiveChild roomC = new NotificationPolicy.ActiveChild("acc-1", "chat-c", true);
+        NotificationPolicy.ActiveChild foreign = new NotificationPolicy.ActiveChild("acc-2", "chat-b", true);
+        NotificationPolicy.ActiveChild openChat = new NotificationPolicy.ActiveChild("acc-1", "open-1", false);
+
+        check(NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB))
+                        == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomBLegacy))
+                                == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomBLegacy))
+                                == NotificationPolicy.SummaryAction.KEEP_SINGLE_ROOM,
+                "Keeps single remaining regular chat summary regardless of legacy null account stamp");
+
+        check(NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(roomB, roomC))
+                        == NotificationPolicy.SummaryAction.KEEP_GENERIC
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(foreign))
+                                == NotificationPolicy.SummaryAction.KEEP_GENERIC
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.asList(openChat))
+                                == NotificationPolicy.SummaryAction.KEEP_GENERIC
+                        && NotificationPolicy.resolveGroupSummary("acc-1", Arrays.<NotificationPolicy.ActiveChild>asList((NotificationPolicy.ActiveChild) null))
+                                == NotificationPolicy.SummaryAction.KEEP_GENERIC,
+                "Falls back to generic summary for multiple rooms, foreign accounts, OpenChat, or null entries");
+
+        check(NotificationPolicy.canStageMediaPreview(true, true, true, 5L, 5L, "acc-1", "acc-1"),
+                "Allows media preview staging when settings, privacy, generation, and account match");
+        check(!NotificationPolicy.canStageMediaPreview(false, true, true, 5L, 5L, "acc-1", "acc-1")
+                        && !NotificationPolicy.canStageMediaPreview(true, false, true, 5L, 5L, "acc-1", "acc-1")
+                        && !NotificationPolicy.canStageMediaPreview(true, true, false, 5L, 5L, "acc-1", "acc-1")
+                        && !NotificationPolicy.canStageMediaPreview(true, true, true, 5L, 6L, "acc-1", "acc-1")
+                        && !NotificationPolicy.canStageMediaPreview(true, true, true, 5L, 5L, "acc-1", "acc-2")
+                        && !NotificationPolicy.canStageMediaPreview(true, true, true, 5L, 5L, "", "acc-1"),
+                "Blocks media preview staging when any toggle, privacy flag, generation, or account changes");
     }
 
     private static Snapshot snapshot(boolean muted) {
