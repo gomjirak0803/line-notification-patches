@@ -1,5 +1,12 @@
 # Device & Cross-Environment Test Matrix
 
+## `0.2.1` Mark LINE 26.19.0 target as non-experimental — 2026-11-26
+
+Flipped `AppTarget.isExperimental` from `true` to `false` in `Shared.kt` so Morphe Manager surfaces LINE `26.19.0` (`261900178`) as a standard supported version without requiring **Experimental app versions** or **Pre-release patches**, and enforced `isExperimental` target alignment in `tests/test_bundle_metadata.py`. Runtime extension classes and DEX hook bytecode are unchanged from the live S10e-verified `0.2.0` build (`3bc39f7d7129e81bfbfd26f2c2ac4bf1c81239526465b85fe05323fa4893258b`).
+
+* **Automated checks**: 224 `NotificationPolicy` assertions, 279 `ExtensionRuntimeTest` JVM behavioral checks (45 scenarios), 29 Python unit tests, 5 APK static contract suites: 3,198 (ARM64 all), 3,198 (Universal all), 3,134 (`Mark as read`-only), 3,156 (`More Chat Info`-only), 3,176 (`Not Too Much Silent`-only); `morphe-desktop list-patches` verified `Enabled: true` on all 6 patches.
+* **SHA-256**: local `0.2.1` bundle `ec0744d418dbf160ec2cc942bb92041ccd0fc62a420074deda19e9cdbe5f227d`; prior S10e-verified signed APK `3bc39f7d7129e81bfbfd26f2c2ac4bf1c81239526465b85fe05323fa4893258b`.
+
 ## `0.2.0` LINE 26.19.0 (261900178) port & live Galaxy S10e verification — 2026-11-26
 
 Ported all 6 patches, bytecode hooks, reflection bindings, and runtime fakes to LINE `26.19.0` (`261900178`), fixed the 13-parameter `Lti5/a0;<init>` `v16 > v15` register overflow in `SettingsPatch.kt` (plus `Opcode.IPUT_BOOLEAN` tracing), migrated `NativeLine.muted()` to DI `ch8.c`/`eh8.e.b`, updated `Lln3/k$d;->b`, `ReadActions` `q08.b` `onComplete`/`b`, Glide `X(Integer.MIN_VALUE, Integer.MIN_VALUE)`, `Header.setUpButtonVisibility$common_libs` + `duplicateParentState=false`, `Lsm8/c;`, and native action string IDs (`0x7f152a17`/`0x7f152a18`).

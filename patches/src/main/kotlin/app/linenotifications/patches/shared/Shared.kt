@@ -13,7 +13,7 @@ object Constants {
         packageName = "jp.naver.line.android",
         apkFileType = ApkFileType.APKM,
         appIconColor = 0x06C755,
-        targets = listOf(AppTarget(version = "26.19.0", versionCode = 261900178, isExperimental = true, minSdk = 30)),
+        targets = listOf(AppTarget(version = "26.19.0", versionCode = 261900178, isExperimental = false, minSdk = 30)),
     )
 }
 

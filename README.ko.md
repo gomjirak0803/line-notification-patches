@@ -4,11 +4,11 @@
 
 Morphe 원격 소스: https://github.com/gomjirak0803/line-notification-patches
 
-* **[v0.2.0 다운로드](https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.2.0)** · [배포 검증 결과](docs/PUBLICATION_STATUS.md) · [실기기 검증표](docs/DEVICE_TESTS.md)
+* **[v0.2.1 다운로드](https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.2.1)** · [배포 검증 결과](docs/PUBLICATION_STATUS.md) · [실기기 검증표](docs/DEVICE_TESTS.md)
 
-[Morphe Manager에 소스 추가](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) · **Experimental app versions**를 켜세요(`-dev` 프리릴리스 빌드를 쓸 때만 **Pre-release patches**를 켭니다).
+[Morphe Manager에 소스 추가](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches) *(정식 릴리스는 **Experimental app versions**나 **Pre-release patches** 스위치를 켜지 않아도 바로 표시됩니다. `-dev` 빌드를 쓸 때만 **Pre-release patches**를 켜세요.)*
 
-LINE `26.19.0` (`versionCode 261900178`, `minSdk 30`)용 **독립 실험 Morphe 패치**입니다. LINE, LY Corporation, Morphe의 공식 프로젝트가 아닙니다.
+LINE `26.19.0` (`versionCode 261900178`, `minSdk 30`)용 **독립 Morphe 패치**입니다. LINE, LY Corporation, Morphe의 공식 프로젝트가 아닙니다.
 
 ## 구현 범위
 
@@ -27,7 +27,7 @@ LINE `26.19.0` (`versionCode 261900178`, `minSdk 30`)용 **독립 실험 Morphe 
 ## Morphe Manager에서 사용
 
 1. Patcher `2.3.0` 이상을 지원하는 Morphe Manager에서 [Manager에 소스 추가](https://morphe.software/add-source?github=gomjirak0803/line-notification-patches)를 열거나 **Sources → + → Remote**에 `https://github.com/gomjirak0803/line-notification-patches`를 입력합니다.
-2. 해당 소스의 **Experimental app versions**를 켭니다(`-dev` 프리릴리스 빌드를 사용할 때만 **Pre-release patches**를 함께 켭니다).
+2. 정식 릴리스(`0.2.1+`)는 **Experimental app versions**나 **Pre-release patches**를 켜지 않아도 됩니다(`-dev` 프리릴리스 빌드를 사용할 때만 **Pre-release patches**를 켭니다).
 3. 본인이 준비한 원본 LINE `26.19.0` (`261900178`) **APKM 전체 파일**(`base.apk` 단독 불가)을 선택하고 패치를 적용합니다. 6개 패치가 기본 포함되며(앱 내 스위치는 최초 모두 꺼짐), 일부 패치만 제외하고 싶을 때만 **Expert mode**를 사용하세요.
 4. 공식 LINE과 서명이 다르므로 **기존 앱을 제거하기 전에 반드시 대화 백업과 계정 복구 수단을 확인하세요.**
 5. 설치 후 LINE 설정 → 프로필 아래 **알림 패치 설정**에서 사용할 스위치를 켭니다.

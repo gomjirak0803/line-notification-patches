@@ -50,12 +50,13 @@ class BundleMetadataTest(unittest.TestCase):
     def test_patch_list_line_target_matches_shared_kt(self):
         shared_src = (ROOT / "patches/src/main/kotlin/app/linenotifications/patches/shared/Shared.kt").read_text(encoding="utf-8")
         target_match = re.search(
-            r'AppTarget\(\s*version\s*=\s*"([^"]+)"\s*,\s*versionCode\s*=\s*(\d+)',
+            r'AppTarget\(\s*version\s*=\s*"([^"]+)"\s*,\s*versionCode\s*=\s*(\d+)\s*,\s*isExperimental\s*=\s*(true|false)',
             shared_src,
         )
         self.assertIsNotNone(target_match)
         expected_version = target_match.group(1)
         expected_code = int(target_match.group(2))
+        expected_experimental = target_match.group(3) == "true"
         self.assertIn(f'packageMetadata.versionName != "{expected_version}"', shared_src)
         self.assertIn(f'packageMetadata.versionCode != "{expected_code}"', shared_src)
 
@@ -77,6 +78,11 @@ class BundleMetadataTest(unittest.TestCase):
             self.assertTrue(
                 all(code == expected_code for code in targets[0]["versionCodes"].values()),
                 f"Target versionCode mismatch in {patch['name']}",
+            )
+            self.assertIs(
+                targets[0]["isExperimental"],
+                expected_experimental,
+                f"Target isExperimental mismatch in {patch['name']}",
             )
 
     def test_release_workflow_prerelease_is_conditional(self):
