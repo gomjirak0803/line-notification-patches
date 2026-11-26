@@ -1,17 +1,27 @@
-# Publication Status — 2026-11-25
+# Publication Status — 2026-11-26
 
-## Latest release (`v0.1.19-dev`)
+## Latest release (`v0.2.0`)
 
 * **Repository**: https://github.com/gomjirak0803/line-notification-patches
-* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.19-dev
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.2.0 (`isPrerelease: false`, `latest` release)
 * **Add in Morphe Manager**: https://morphe.software/add-source?github=gomjirak0803/line-notification-patches
-* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45584419030 (success, 1m 15s; `Build patch-only assets` + `Run full Python test suite` gated before publish)
-* **Source commit**: `483f016` (metadata commit: `c90db01`)
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45783048490 (success, 1m 22s; `Build patch-only assets` + `Run full Python test suite` gated before publish)
+* **Source commit**: `a033f9f` (metadata commit: `b2784b6`)
 
-Adds 64-bit random non-zero `SLOT_EPOCH` alongside monotonic `SLOT_GEN` in a unified 256-cap `SLOT_LEDGER`, pre-SQL and strict numeric `isVerifiedReadAtOrBefore` READ-boundary checks (with `DISCARD` redaction on privacy-OFF active refreshes), `QUIET`/`NORMAL` channel preservation across hide/unhide and crash recovery (`pending_hide`, single-`STATE_LOCK` `hideDisposition` without native I/O, worker-based `onHideCompletedAsync` + lock-verified `cancelConfirmedHiddenChats`, `RECONCILING_ACCOUNTS`/`RECONCILED_ACCOUNTS` retry), privacy-OFF redaction of active plaintext/summary/sticker/car/wearable/remote-input extras and rebuilt summary `publicVersion.shortcutId`, standalone `No reply` original contextual-action restoration (`ORIG_CONTEXTUAL_ACTIONS`), and `enqueuedSeq`-ordered shared-summary `PENDING_POSTS` (verified with 224 `NotificationPolicy` assertions, 271 `ExtensionRuntimeTest` JVM behavioral checks across 44 scenarios, 27 Python tests, 5 APK static contract suites — 3,165 ARM64/Universal, 3,103 `read-only`, 3,125 `info-only`, 3,143 `silent-only` — and live Galaxy S10e verification covering Smokes 1, 2, 4, 5, 6A/6B PC LINE read-sync, and 7). The published `line-notification-patches-0.1.19-dev.mpp` is `210,430` bytes with SHA-256 `a1567ed3a4f0c8025f570058cb70f3711c7107e511e3e2c37a1486142fed0f41`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 18 ZIP entries against the local build (`490bd01f14c70d4827d2c05f2f0c7de8e3cf9d289a19c05ef35bc3434e72ab8b`) confirmed byte-for-byte parity across every executable class, DEX, extension, resource, and manifest entry (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The source archive (`381,651` bytes, 135 files) SHA-256 is `2c493650973db8240cbbbe7953b0cea9a9d4f47333bd564126ec401b0edd0bd0`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-25T09:21:15"` and `"version": "0.1.19-dev"`, passing all 27 Python tests.
+Ports all 6 patches, bytecode hooks, runtime reflection adapters, and contract/runtime tests to LINE `26.19.0` (`261900178`) as an official non-prerelease release, fixing the 13-parameter `Lti5/a0;<init>` `v16 > v15` register overflow in `SettingsPatch.kt` (plus `Opcode.IPUT_BOOLEAN` tracing), migrating `NativeLine.muted()` to DI `ch8.c`/`eh8.e.b`, updating `Lln3/k$d;->b`, `ReadActions` `q08.b` `onComplete`/`b`, Glide `X(Integer.MIN_VALUE, Integer.MIN_VALUE)`, `Header.setUpButtonVisibility$common_libs` + `duplicateParentState=false`, `Lsm8/c;` continuation bridge, notification hooks, and native action string resource IDs `0x7f152a17`/`0x7f152a18` (verified with 224 `NotificationPolicy` assertions, 279 `ExtensionRuntimeTest` JVM behavioral checks across 45 scenarios, 29 Python unit tests, 5 APK static contract suites — 3,198 ARM64/Universal, 3,134 `Mark as read`-only, 3,156 `More Chat Info`-only, 3,176 `Not Too Much Silent`-only — compiled `resources.arsc` checks, independent `gpt-6.2-astra` bytecode cross-check, and live Galaxy S10e LINE `26.19.0` same-key upgrade + Smoke A/B/C with 0 logcat errors across 47,217 lines). The published `line-notification-patches-0.2.0.mpp` is `211,566` bytes with SHA-256 `5ddc1e6159b1693f205771b97c4382df7cc6b58fe93931b2451a51c31595ff71`, matching `SHA256SUMS.txt` and the directly downloaded asset. Comparing all 18 ZIP entries against the local build (`5b7899f2d8367fc6ac6c5fea7d876539f9357c1c0356496d8a34b4f1c9ab5804`) confirmed byte-for-byte parity across every executable class, DEX, extension, resource, and manifest entry (differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings). The source archive (`389,476` bytes, 144 files) SHA-256 is `a355a7bfdca3aa2030f6d31b82ce2638612bff216f5885d5ae0b26e244b7c8fe`. `main/patches-bundle.json` was updated to `"created_at": "2026-11-26T08:26:45"` and `"version": "0.2.0"`, passing all 29 Python tests.
 
 ## Previous releases
 
+### `v0.1.19-dev` (2026-11-25)
+
+* **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.19-dev
+* **GitHub Actions run**: https://github.com/gomjirak0803/line-notification-patches/actions/runs/45584419030 (success, 1m 15s; `Build patch-only assets` + `Run full Python test suite` gated before publish)
+* **Source commit**: `483f016` (metadata commit: `c90db01`)
+* **Published MPP** (`210,430` bytes): `a1567ed3a4f0c8025f570058cb70f3711c7107e511e3e2c37a1486142fed0f41` (ZIP entry parity across all 18 entries with local build `490bd01f14c70d4827d2c05f2f0c7de8e3cf9d289a19c05ef35bc3434e72ab8b`, differing only in `THIRD_PARTY_NOTICES.md` CRLF/LF line endings).
+* **Source ZIP SHA-256**: `2c493650973db8240cbbbe7953b0cea9a9d4f47333bd564126ec401b0edd0bd0`.
+* `main/patches-bundle.json`: `"created_at": "2026-11-25T09:21:15"`, `"version": "0.1.19-dev"`.
+
+*(Details: 64-bit random non-zero `SLOT_EPOCH` alongside monotonic `SLOT_GEN` in a unified 256-cap `SLOT_LEDGER`, pre-SQL and strict numeric `isVerifiedReadAtOrBefore` READ-boundary checks, `QUIET`/`NORMAL` channel preservation across hide/unhide and crash recovery, privacy-OFF redaction, standalone `No reply` original contextual-action restoration, and `enqueuedSeq`-ordered shared-summary `PENDING_POSTS`; verified with 224 `NotificationPolicy` assertions, 271 `ExtensionRuntimeTest` checks across 44 scenarios, 27 Python tests, 5 APK static contract suites, and live Galaxy S10e Smokes 1, 2, 4, 5, 6A/6B, and 7.)*
 ### `v0.1.18-dev` (2026-11-24)
 
 * **Release**: https://github.com/gomjirak0803/line-notification-patches/releases/tag/v0.1.18-dev
